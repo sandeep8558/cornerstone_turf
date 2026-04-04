@@ -1,1 +1,4 @@
-# Conrnerstone Turf Website and Application Plan
+# Conrnerstone Turf Website and Application Planning
+
+Website
+Mobile Application
