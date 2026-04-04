@@ -14,3 +14,4 @@
  - small photo gallery
  - contact information
  - single page
+ - Social media links
