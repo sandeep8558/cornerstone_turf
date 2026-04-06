@@ -1,0 +1,12 @@
+{
+  "name": "cornerstone-turf-website",
+  "version": "1.0.0",
+  "description": "Premium Sports Facility Website",
+  "main": "index.html",
+  "scripts": {
+    "dev": "browser-sync start --server 'website' --files 'website/**/*'"
+  },
+  "devDependencies": {
+    "browser-sync": "^3.0.0"
+  }
+}
