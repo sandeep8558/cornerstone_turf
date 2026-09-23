@@ -1534,23 +1534,25 @@ class _TurfDetailScreenState extends State<TurfDetailScreen> {
                                     .map(
                                       (sport) => Container(
                                         padding: const EdgeInsets.symmetric(
-                                          horizontal: 12,
-                                          vertical: 6,
+                                          horizontal: 14,
+                                          vertical: 7,
                                         ),
                                         decoration: BoxDecoration(
-                                          color: AppColors.cardBg,
+                                          color: AppColors.green50,
                                           borderRadius: BorderRadius.circular(
                                             10,
                                           ),
                                           border: Border.all(
                                             color: AppColors.green200,
+                                            width: 1.2,
                                           ),
                                         ),
                                         child: Text(
                                           sport['name'],
                                           style: const TextStyle(
                                             color: AppColors.textMain,
-                                            fontSize: 12,
+                                            fontSize: 13,
+                                            fontWeight: FontWeight.bold,
                                           ),
                                         ),
                                       ),

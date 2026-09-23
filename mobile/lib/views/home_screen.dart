@@ -374,25 +374,28 @@ class HomeScreen extends StatelessWidget {
                   const SizedBox(height: 12),
                   Wrap(
                     spacing: 8,
-                    runSpacing: 4,
+                    runSpacing: 6,
                     children: (turf['sports'] as List)
                         .take(3)
                         .map(
                           (sport) => Container(
                             padding: const EdgeInsets.symmetric(
-                              horizontal: 10,
-                              vertical: 4,
+                              horizontal: 14,
+                              vertical: 7,
                             ),
                             decoration: BoxDecoration(
                               color: AppColors.green50,
-                              border: Border.all(color: AppColors.green200),
-                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(
+                                color: AppColors.green200,
+                                width: 1.2,
+                              ),
+                              borderRadius: BorderRadius.circular(10),
                             ),
                             child: Text(
                               sport['name'],
                               style: const TextStyle(
                                 color: AppColors.textMain,
-                                fontSize: 11,
+                                fontSize: 13,
                                 fontWeight: FontWeight.bold,
                               ),
                             ),
