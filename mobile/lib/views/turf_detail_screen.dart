@@ -1614,62 +1614,74 @@ class _TurfDetailScreenState extends State<TurfDetailScreen> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Text(
-                                  _isScatteredBooking
-                                      ? 'Select Scattered Dates'
-                                      : (_isLongBooking
-                                          ? 'Select Date Range'
-                                          : 'Select Date'),
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.bold,
+                            Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.all(4),
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(24),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withOpacity(0.04),
+                                    blurRadius: 8,
+                                    offset: const Offset(0, 2),
                                   ),
-                                ),
-                                Container(
-                                  decoration: BoxDecoration(
-                                    color: Colors.white,
-                                    borderRadius: BorderRadius.circular(20),
+                                ],
+                              ),
+                              child: Row(
+                                children: [
+                                  Expanded(
+                                    child: _buildTypeTab('Day', !_isLongBooking, () {
+                                      setState(() {
+                                        _isLongBooking = false;
+                                        _isScatteredBooking = false;
+                                        _selectedDate = DateTime.now();
+                                        _selectedSlotIds.clear();
+                                        _totalAmount = 0;
+                                      });
+                                      _fetchSlots();
+                                    }),
                                   ),
-                                  child: Row(
-                                    children: [
-                                      _buildTypeTab('Day', !_isLongBooking, () {
-                                        setState(() {
-                                          _isLongBooking = false;
-                                          _isScatteredBooking = false;
-                                          _selectedDate = DateTime.now();
-                                          _selectedSlotIds.clear();
-                                          _totalAmount = 0;
-                                        });
-                                        _fetchSlots();
-                                      }),
-                                      _buildTypeTab('Long', _isLongBooking && !_isScatteredBooking, () {
-                                        setState(() {
-                                          _isLongBooking = true;
-                                          _isScatteredBooking = false;
-                                          _selectedSlotIds.clear();
-                                          _totalAmount = 0;
-                                        });
-                                        _fetchSlots();
-                                      }),
-                                      _buildTypeTab('Scattered', _isScatteredBooking, () {
-                                        setState(() {
-                                          _isLongBooking = true;
-                                          _isScatteredBooking = true;
-                                          if (_scatteredDates.isEmpty) {
-                                            _scatteredDates.add(DateTime.now());
-                                          }
-                                          _selectedSlotIds.clear();
-                                          _totalAmount = 0;
-                                        });
-                                        _fetchSlots();
-                                      }),
-                                    ],
+                                  Expanded(
+                                    child: _buildTypeTab('Long', _isLongBooking && !_isScatteredBooking, () {
+                                      setState(() {
+                                        _isLongBooking = true;
+                                        _isScatteredBooking = false;
+                                        _selectedSlotIds.clear();
+                                        _totalAmount = 0;
+                                      });
+                                      _fetchSlots();
+                                    }),
                                   ),
-                                ),
-                              ],
+                                  Expanded(
+                                    child: _buildTypeTab('Scattered', _isScatteredBooking, () {
+                                      setState(() {
+                                        _isLongBooking = true;
+                                        _isScatteredBooking = true;
+                                        if (_scatteredDates.isEmpty) {
+                                          _scatteredDates.add(DateTime.now());
+                                        }
+                                        _selectedSlotIds.clear();
+                                        _totalAmount = 0;
+                                      });
+                                      _fetchSlots();
+                                    }),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(height: 16),
+                            Text(
+                              _isScatteredBooking
+                                  ? 'Select Scattered Dates'
+                                  : (_isLongBooking
+                                      ? 'Select Date Range'
+                                      : 'Select Date'),
+                              style: const TextStyle(
+                                color: AppColors.textMain,
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                              ),
                             ),
                             const SizedBox(height: 10),
                             if (_isScatteredBooking)
@@ -2552,10 +2564,12 @@ class _TurfDetailScreenState extends State<TurfDetailScreen> {
   Widget _buildTypeTab(String label, bool isSelected, VoidCallback onTap) {
     return GestureDetector(
       onTap: onTap,
-      child: Container(
+      behavior: HitTestBehavior.opaque,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        alignment: Alignment.center,
         padding: const EdgeInsets.symmetric(
-          horizontal: 12,
-          vertical: 6,
+          vertical: 10,
         ),
         decoration: BoxDecoration(
           color: isSelected ? AppColors.primary : Colors.transparent,
@@ -2563,9 +2577,10 @@ class _TurfDetailScreenState extends State<TurfDetailScreen> {
         ),
         child: Text(
           label,
+          textAlign: TextAlign.center,
           style: TextStyle(
             color: isSelected ? Colors.white : AppColors.textSecondary,
-            fontSize: 12,
+            fontSize: 13,
             fontWeight: FontWeight.bold,
           ),
         ),
