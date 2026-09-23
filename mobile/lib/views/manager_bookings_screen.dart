@@ -234,7 +234,7 @@ class _ManagerBookingsScreenState extends State<ManagerBookingsScreen> {
               ),
             ),
           ),
-          const SizedBox(width: 10),
+          const SizedBox(width: 8),
 
           // Center Date Display Card (Clickable to pick date)
           Expanded(
@@ -272,7 +272,7 @@ class _ManagerBookingsScreenState extends State<ManagerBookingsScreen> {
                 },
                 child: Container(
                   height: 44,
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  padding: const EdgeInsets.symmetric(horizontal: 10),
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(
@@ -289,7 +289,7 @@ class _ManagerBookingsScreenState extends State<ManagerBookingsScreen> {
                         color:
                             isToday ? AppColors.primary : AppColors.textSecondary,
                       ),
-                      const SizedBox(width: 8),
+                      const SizedBox(width: 6),
                       Flexible(
                         child: Text(
                           isToday
@@ -301,16 +301,16 @@ class _ManagerBookingsScreenState extends State<ManagerBookingsScreen> {
                                 ? AppColors.primary
                                 : AppColors.textMain,
                             fontWeight: FontWeight.bold,
-                            fontSize: 14,
+                            fontSize: 13,
                           ),
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
-                      const SizedBox(width: 4),
+                      const SizedBox(width: 2),
                       const Icon(
                         Icons.arrow_drop_down,
                         color: AppColors.textSecondary,
-                        size: 20,
+                        size: 18,
                       ),
                     ],
                   ),
@@ -318,7 +318,7 @@ class _ManagerBookingsScreenState extends State<ManagerBookingsScreen> {
               ),
             ),
           ),
-          const SizedBox(width: 10),
+          const SizedBox(width: 8),
 
           // Next Date Button (>)
           Material(
@@ -347,6 +347,49 @@ class _ManagerBookingsScreenState extends State<ManagerBookingsScreen> {
               ),
             ),
           ),
+
+          // Quick 'Today' Button when selected date is far from today
+          if (!isToday) ...[
+            const SizedBox(width: 8),
+            Material(
+              color: AppColors.primary,
+              borderRadius: BorderRadius.circular(12),
+              elevation: 1,
+              child: InkWell(
+                borderRadius: BorderRadius.circular(12),
+                onTap: () {
+                  setState(() {
+                    _selectedDate = DateTime.now();
+                  });
+                  _fetchBookings();
+                },
+                child: Container(
+                  height: 44,
+                  padding: const EdgeInsets.symmetric(horizontal: 10),
+                  alignment: Alignment.center,
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.today_rounded,
+                        color: Colors.white,
+                        size: 15,
+                      ),
+                      SizedBox(width: 4),
+                      Text(
+                        'Today',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ],
         ],
       ),
     );
