@@ -929,7 +929,7 @@ class _TurfDetailScreenState extends State<TurfDetailScreen> {
                           labelText: 'Additional Discount',
                           labelStyle: const TextStyle(color: AppColors.primary),
                           hintText: 'Enter discount amount',
-                          prefixIcon: const Icon(Icons.percent, color: AppColors.primary),
+                          prefixIcon: const Icon(Icons.currency_rupee, color: AppColors.primary),
                           enabledBorder: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(15),
                             borderSide: const BorderSide(color: AppColors.green200),
