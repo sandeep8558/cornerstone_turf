@@ -149,16 +149,16 @@ new class extends Component {
                                  alt="{{ $slider->title ?: 'Slider image' }}">
                             
                             <!-- Badges Top Overlay -->
-                            <div class="position-absolute top-0 start-0 end-0 p-3 d-flex justify-content-between align-items-center">
-                                <span class="badge bg-dark bg-opacity-75 text-white rounded-pill px-2.5 py-1 extra-small fw-semibold shadow-sm">
+                            <div class="position-absolute top-0 start-0 end-0 p-2.5 d-flex justify-content-between align-items-center">
+                                <span class="badge text-white rounded-pill px-2.5 py-1 extra-small fw-semibold shadow-sm" style="backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); background-color: rgba(15, 23, 42, 0.72); border: 1px solid rgba(255, 255, 255, 0.15);">
                                     Order: #{{ $slider->sort_order }}
                                 </span>
                                 @if($slider->is_active)
-                                    <span class="badge bg-success text-white rounded-pill px-2.5 py-1 extra-small fw-semibold shadow-sm">
+                                    <span class="badge text-white rounded-pill px-2.5 py-1 extra-small fw-semibold shadow-sm" style="backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); background-color: rgba(22, 163, 74, 0.9); border: 1px solid rgba(255, 255, 255, 0.2);">
                                         Active
                                     </span>
                                 @else
-                                    <span class="badge bg-secondary text-white rounded-pill px-2.5 py-1 extra-small fw-semibold shadow-sm">
+                                    <span class="badge text-white rounded-pill px-2.5 py-1 extra-small fw-semibold shadow-sm" style="backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); background-color: rgba(100, 116, 139, 0.85); border: 1px solid rgba(255, 255, 255, 0.15);">
                                         Inactive
                                     </span>
                                 @endif
@@ -166,36 +166,34 @@ new class extends Component {
                         </div>
 
                         <!-- Card Body -->
-                        <div class="card-body p-3 d-flex flex-column justify-content-between">
-                            <div>
-                                <h3 class="h6 fw-bold text-dark mb-1 text-truncate" title="{{ $slider->title }}">
-                                    {{ $slider->title ?: 'No Title' }}
-                                </h3>
-                                <div class="text-muted extra-small d-flex align-items-center gap-1">
-                                    <svg style="width: 0.8rem; height: 0.8rem;" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"/>
-                                    </svg>
-                                    <span>Added {{ $slider->created_at ? $slider->created_at->diffForHumans() : 'Recently' }}</span>
-                                </div>
+                        <div class="card-body p-3">
+                            <h3 class="h6 fw-bold text-dark mb-1 text-truncate" title="{{ $slider->title }}">
+                                {{ $slider->title ?: 'No Title' }}
+                            </h3>
+                            <div class="text-muted extra-small d-flex align-items-center gap-1.5">
+                                <svg style="width: 0.85rem; height: 0.85rem;" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"/>
+                                </svg>
+                                <span>Added {{ $slider->created_at ? $slider->created_at->diffForHumans() : 'Recently' }}</span>
                             </div>
+                        </div>
 
-                            <hr class="my-3 opacity-25">
-
-                            <!-- Action Buttons -->
-                            <div class="d-flex align-items-center justify-content-between gap-2">
+                        <!-- Modern Action Footer -->
+                        <div class="card-footer bg-light bg-opacity-50 border-top border-light-subtle px-3 py-2.5">
+                            <div class="d-flex align-items-center gap-2">
                                 <button wire:click="editSlider({{ $slider->id }})" 
-                                        class="btn btn-outline-primary btn-sm rounded-pill px-3 py-1 flex-grow-1 d-inline-flex align-items-center justify-content-center gap-1" 
-                                        style="font-size: 0.8rem;">
-                                    <svg style="width: 0.85rem; height: 0.85rem;" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                        class="btn btn-action-edit flex-grow-1 d-inline-flex align-items-center justify-content-center gap-1.5" 
+                                        title="Edit Slider">
+                                    <svg class="action-icon" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0 1 15.75 21H5.25A2.25 2.25 0 0 1 3 18.75V8.25A2.25 2.25 0 0 1 5.25 6H10"/>
                                     </svg>
                                     <span>Edit</span>
                                 </button>
                                 <button onclick="confirm('Are you sure you want to delete this slider?') || event.stopImmediatePropagation()" 
                                         wire:click="deleteSlider({{ $slider->id }})" 
-                                        class="btn btn-outline-danger btn-sm rounded-pill px-3 py-1 flex-grow-1 d-inline-flex align-items-center justify-content-center gap-1" 
-                                        style="font-size: 0.8rem;">
-                                    <svg style="width: 0.85rem; height: 0.85rem;" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                        class="btn btn-action-delete flex-grow-1 d-inline-flex align-items-center justify-content-center gap-1.5" 
+                                        title="Remove Slider">
+                                    <svg class="action-icon" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" d="m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0"/>
                                     </svg>
                                     <span>Remove</span>
@@ -299,11 +297,68 @@ new class extends Component {
 
     <style>
         .slider-card {
-            transition: transform 0.2s ease, box-shadow 0.2s ease;
+            transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.25s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.25s ease;
+            border-color: #e2e8f0 !important;
         }
         .slider-card:hover {
-            transform: translateY(-3px);
-            box-shadow: 0 0.75rem 1.5rem rgba(0, 0, 0, 0.08) !important;
+            transform: translateY(-4px);
+            box-shadow: 0 12px 24px -4px rgba(0, 0, 0, 0.08), 0 4px 8px -2px rgba(0, 0, 0, 0.03) !important;
+            border-color: #cbd5e1 !important;
+        }
+
+        .action-icon {
+            width: 0.925rem;
+            height: 0.925rem;
+            transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        /* Modern subtle action buttons */
+        .btn-action-edit {
+            background-color: #f0fdf4;
+            color: #16a34a;
+            border: 1px solid #bbf7d0;
+            font-size: 0.8125rem;
+            font-weight: 600;
+            border-radius: 9px;
+            padding: 0.45rem 0.75rem;
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .btn-action-edit:hover {
+            background-color: #16a34a;
+            color: #ffffff;
+            border-color: #16a34a;
+            box-shadow: 0 4px 12px rgba(22, 163, 74, 0.25);
+            transform: translateY(-1px);
+        }
+        .btn-action-edit:hover .action-icon {
+            transform: rotate(-10deg) scale(1.12);
+        }
+        .btn-action-edit:active {
+            transform: scale(0.97);
+        }
+
+        .btn-action-delete {
+            background-color: #fef2f2;
+            color: #ef4444;
+            border: 1px solid #fecaca;
+            font-size: 0.8125rem;
+            font-weight: 600;
+            border-radius: 9px;
+            padding: 0.45rem 0.75rem;
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .btn-action-delete:hover {
+            background-color: #dc2626;
+            color: #ffffff;
+            border-color: #dc2626;
+            box-shadow: 0 4px 12px rgba(220, 38, 38, 0.25);
+            transform: translateY(-1px);
+        }
+        .btn-action-delete:hover .action-icon {
+            transform: scale(1.12);
+        }
+        .btn-action-delete:active {
+            transform: scale(0.97);
         }
     </style>
 </div>
