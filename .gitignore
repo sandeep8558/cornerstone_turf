@@ -1,0 +1,9 @@
+.DS_Store
+
+# Sensitive credential files
+*.jks
+*.csv
+Razorpay.txt
+mailgun.txt
+playstore.txt
+notes.txt
