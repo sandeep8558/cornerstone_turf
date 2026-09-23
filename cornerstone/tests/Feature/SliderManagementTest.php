@@ -173,4 +173,33 @@ class SliderManagementTest extends TestCase
             ->assertJsonPath('0.title', 'Active 2') // Sorted by sort_order
             ->assertJsonPath('1.title', 'Active 1');
     }
+
+    public function test_admin_can_reorder_sliders(): void
+    {
+        $user = User::factory()->create();
+        $user->assignRole('Administrator');
+        $this->actingAs($user);
+
+        $sliderA = Slider::create([
+            'title' => 'Slider A',
+            'image' => 'sliders/a.jpg',
+            'sort_order' => 1,
+            'is_active' => true,
+        ]);
+
+        $sliderB = Slider::create([
+            'title' => 'Slider B',
+            'image' => 'sliders/b.jpg',
+            'sort_order' => 2,
+            'is_active' => true,
+        ]);
+
+        // Reorder so Slider B is first, Slider A is second
+        Volt::test('administrator.slider-management')
+            ->call('updateSliderOrder', [$sliderB->id, $sliderA->id])
+            ->assertHasNoErrors();
+
+        $this->assertEquals(1, $sliderB->fresh()->sort_order);
+        $this->assertEquals(2, $sliderA->fresh()->sort_order);
+    }
 }

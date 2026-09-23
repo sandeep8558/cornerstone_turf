@@ -31,13 +31,26 @@ new class extends Component {
             })
             ->orderBy('sort_order', 'asc')
             ->orderBy('created_at', 'desc')
-            ->paginate(12);
+            ->paginate(30);
+    }
+
+    public function updateSliderOrder(array $orderedIds) {
+        $page = $this->getPage();
+        $offset = ($page - 1) * 30;
+
+        foreach ($orderedIds as $index => $id) {
+            Slider::where('id', $id)->update([
+                'sort_order' => $offset + $index + 1,
+            ]);
+        }
+
+        session()->flash('message', 'Sliders reordered successfully.');
     }
 
     public function addSlider() {
         $this->reset(['title', 'image', 'currentImage', 'editingSlider', 'sort_order', 'is_active']);
         $this->is_active = true;
-        $this->sort_order = 0;
+        $this->sort_order = (Slider::max('sort_order') ?? 0) + 1;
         $this->dispatch('open-modal', 'slider-modal');
     }
 
@@ -111,11 +124,19 @@ new class extends Component {
     <!-- Table header -->
     <div class="card-header bg-white border-bottom border-light px-4 py-3">
         <div class="row align-items-center g-3">
-            <div class="col-md-4">
-                <h2 class="h6 fw-semibold text-dark mb-0">Image Sliders ({{ $sliders->total() }})</h2>
+            <div class="col-md-5">
+                <div class="d-flex align-items-center gap-2 flex-wrap">
+                    <h2 class="h6 fw-semibold text-dark mb-0">Image Sliders ({{ $sliders->total() }})</h2>
+                    <span class="badge bg-success-subtle text-success border border-success-subtle rounded-pill px-2.5 py-1 extra-small fw-semibold d-inline-flex align-items-center gap-1" title="Drag cards by their handle to change order">
+                        <svg style="width: 0.75rem; height: 0.75rem;" fill="currentColor" viewBox="0 0 24 24">
+                            <path d="M8.5 6a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0Zm0 6a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0Zm0 6a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0Zm10-12a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0Zm0 6a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0Zm0 6a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0Z"/>
+                        </svg>
+                        <span>Drag cards to reorder</span>
+                    </span>
+                </div>
                 <div class="text-muted extra-small mt-1">Recommended: <strong>1000 x 600 px</strong> (Aspect Ratio <strong>5:3</strong>)</div>
             </div>
-            <div class="col-md-5">
+            <div class="col-md-4">
                 <div class="input-group input-group-sm">
                     <span class="input-group-text bg-light border-end-0 text-muted px-3">
                         <svg style="width: 0.875rem; height: 0.875rem;" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
@@ -138,21 +159,33 @@ new class extends Component {
 
     <!-- Card Grid -->
     <div class="p-4 bg-light bg-opacity-50">
-        <div class="row row-cols-1 row-cols-sm-2 row-cols-lg-3 row-cols-xl-3 g-4">
+        <div id="sortable-sliders" class="row row-cols-1 row-cols-sm-2 row-cols-lg-3 row-cols-xl-3 g-4">
             @forelse($sliders as $slider)
-                <div class="col" wire:key="slider-{{ $slider->id }}">
+                <div class="col slider-item" data-id="{{ $slider->id }}" wire:key="slider-{{ $slider->id }}">
                     <div class="card h-100 border border-light-subtle shadow-sm rounded-4 overflow-hidden bg-white slider-card">
-                        <!-- Image Container with 5:3 Aspect Ratio and Badges -->
-                        <div class="position-relative" style="aspect-ratio: 5/3; background-color: #f1f5f9; overflow: hidden;">
+                        <!-- Image Container with 5:3 Aspect Ratio, Drag surface, and Badges -->
+                        <div class="position-relative slider-drag-surface" style="aspect-ratio: 5/3; background-color: #f1f5f9; overflow: hidden; cursor: grab;">
                             <img src="{{ asset($slider->image) }}" 
-                                 class="w-100 h-100 object-fit-cover" 
-                                 alt="{{ $slider->title ?: 'Slider image' }}">
+                                 class="w-100 h-100 object-fit-cover user-select-none" 
+                                 alt="{{ $slider->title ?: 'Slider image' }}"
+                                 draggable="false">
                             
                             <!-- Badges Top Overlay -->
                             <div class="position-absolute top-0 start-0 end-0 p-2.5 d-flex justify-content-between align-items-center">
                                 <span class="badge text-white rounded-pill px-2.5 py-1 extra-small fw-semibold shadow-sm" style="backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); background-color: rgba(15, 23, 42, 0.72); border: 1px solid rgba(255, 255, 255, 0.15);">
                                     Order: #{{ $slider->sort_order }}
                                 </span>
+
+                                <!-- Drag Grip Badge -->
+                                <div class="drag-handle badge rounded-pill px-2 py-1 extra-small fw-semibold shadow-sm d-flex align-items-center gap-1"
+                                     style="backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); background-color: rgba(15, 23, 42, 0.72); color: rgba(255, 255, 255, 0.95); border: 1px solid rgba(255, 255, 255, 0.2); cursor: grab;"
+                                     title="Drag to reorder slider">
+                                    <svg style="width: 0.75rem; height: 0.75rem;" fill="currentColor" viewBox="0 0 24 24">
+                                        <path d="M8.5 6a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0Zm0 6a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0Zm0 6a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0Zm10-12a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0Zm0 6a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0Zm0 6a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0Z"/>
+                                    </svg>
+                                    <span>Drag</span>
+                                </div>
+
                                 @if($slider->is_active)
                                     <span class="badge text-white rounded-pill px-2.5 py-1 extra-small fw-semibold shadow-sm" style="backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); background-color: rgba(22, 163, 74, 0.9); border: 1px solid rgba(255, 255, 255, 0.2);">
                                         Active
@@ -292,6 +325,42 @@ new class extends Component {
             const modal = bootstrap.Modal.getInstance(document.getElementById('sliderModal'));
             if (modal) modal.hide();
         });
+
+        function setupSliderSortable() {
+            const container = document.getElementById('sortable-sliders');
+            if (!container) return;
+
+            if (container._sortableInstance) {
+                container._sortableInstance.destroy();
+            }
+
+            if (typeof Sortable === 'undefined') {
+                return;
+            }
+
+            container._sortableInstance = new Sortable(container, {
+                animation: 250,
+                handle: '.drag-handle, .slider-drag-surface',
+                draggable: '.slider-item',
+                ghostClass: 'sortable-ghost',
+                chosenClass: 'sortable-chosen',
+                dragClass: 'sortable-drag',
+                onEnd: function () {
+                    const orderedIds = Array.from(container.querySelectorAll('.slider-item'))
+                        .map(el => el.getAttribute('data-id'))
+                        .filter(Boolean);
+
+                    if (orderedIds.length > 0) {
+                        $wire.updateSliderOrder(orderedIds);
+                    }
+                }
+            });
+        }
+
+        setupSliderSortable();
+        $wire.hook('morph.updated', () => {
+            setupSliderSortable();
+        });
     </script>
     @endscript
 
@@ -304,6 +373,34 @@ new class extends Component {
             transform: translateY(-4px);
             box-shadow: 0 12px 24px -4px rgba(0, 0, 0, 0.08), 0 4px 8px -2px rgba(0, 0, 0, 0.03) !important;
             border-color: #cbd5e1 !important;
+        }
+
+        /* Drag and Drop Styling */
+        .slider-drag-surface,
+        .drag-handle {
+            cursor: grab;
+            user-select: none;
+            -webkit-user-drag: none;
+        }
+        .slider-drag-surface:active,
+        .drag-handle:active {
+            cursor: grabbing !important;
+        }
+        .sortable-ghost {
+            opacity: 0.35 !important;
+            border: 2px dashed #16a34a !important;
+            border-radius: 1rem !important;
+            background-color: #f0fdf4 !important;
+            transform: scale(0.97) !important;
+        }
+        .sortable-chosen {
+            cursor: grabbing !important;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.15), 0 8px 10px -6px rgba(0, 0, 0, 0.08) !important;
+        }
+        .sortable-drag {
+            opacity: 0.95 !important;
+            transform: rotate(1deg) scale(1.02);
+            cursor: grabbing !important;
         }
 
         .action-icon {
