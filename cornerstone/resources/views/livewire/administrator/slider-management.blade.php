@@ -31,7 +31,7 @@ new class extends Component {
             })
             ->orderBy('sort_order', 'asc')
             ->orderBy('created_at', 'desc')
-            ->paginate(15);
+            ->paginate(12);
     }
 
     public function addSlider() {
@@ -136,53 +136,87 @@ new class extends Component {
         </div>
     </div>
 
-    <!-- Table -->
-    <div class="table-responsive">
-        <table class="table table-hover align-middle mb-0 small text-dark">
-            <thead class="table-light text-muted text-uppercase" style="font-size: 0.65rem; letter-spacing: 0.05em;">
-                <tr>
-                    <th class="px-4 py-3 text-start fw-semibold">Slide Image</th>
-                    <th class="px-4 py-3 text-start fw-semibold">Title</th>
-                    <th class="px-4 py-3 text-start fw-semibold">Sort Order</th>
-                    <th class="px-4 py-3 text-start fw-semibold">Status</th>
-                    <th class="px-4 py-3 text-end fw-semibold text-nowrap">Actions</th>
-                </tr>
-            </thead>
-            <tbody class="divide-y">
-                @forelse($sliders as $slider)
-                    <tr wire:key="slider-{{ $slider->id }}">
-                        <td class="px-4 py-3">
-                            <img src="{{ asset($slider->image) }}" class="rounded shadow-sm" style="width: 100px; aspect-ratio: 5/3; object-fit: cover;" alt="Slider image">
-                        </td>
-                        <td class="px-4 py-3">
-                            <span class="fw-bold text-dark">{{ $slider->title ?: 'No Title' }}</span>
-                        </td>
-                        <td class="px-4 py-3 text-muted">
-                            {{ $slider->sort_order }}
-                        </td>
-                        <td class="px-4 py-3">
-                            @if($slider->is_active)
-                                <span class="badge bg-success-subtle text-success border border-success-subtle rounded-pill px-2.5 py-1">Active</span>
-                            @else
-                                <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle rounded-pill px-2.5 py-1">Inactive</span>
-                            @endif
-                        </td>
-                        <td class="px-4 py-3 text-end text-nowrap">
-                            <div class="d-flex align-items-center justify-content-end gap-2">
-                                <button wire:click="editSlider({{ $slider->id }})" class="btn btn-outline-primary btn-sm rounded-pill px-3 py-1" style="font-size: 0.75rem;">Edit</button>
-                                <button onclick="confirm('Are you sure?') || event.stopImmediatePropagation()" wire:click="deleteSlider({{ $slider->id }})" class="btn btn-outline-danger btn-sm rounded-pill px-3 py-1" style="font-size: 0.75rem;">Remove</button>
+    <!-- Card Grid -->
+    <div class="p-4 bg-light bg-opacity-50">
+        <div class="row row-cols-1 row-cols-sm-2 row-cols-lg-3 row-cols-xl-3 g-4">
+            @forelse($sliders as $slider)
+                <div class="col" wire:key="slider-{{ $slider->id }}">
+                    <div class="card h-100 border border-light-subtle shadow-sm rounded-4 overflow-hidden bg-white slider-card">
+                        <!-- Image Container with 5:3 Aspect Ratio and Badges -->
+                        <div class="position-relative" style="aspect-ratio: 5/3; background-color: #f1f5f9; overflow: hidden;">
+                            <img src="{{ asset($slider->image) }}" 
+                                 class="w-100 h-100 object-fit-cover" 
+                                 alt="{{ $slider->title ?: 'Slider image' }}">
+                            
+                            <!-- Badges Top Overlay -->
+                            <div class="position-absolute top-0 start-0 end-0 p-3 d-flex justify-content-between align-items-center">
+                                <span class="badge bg-dark bg-opacity-75 text-white rounded-pill px-2.5 py-1 extra-small fw-semibold shadow-sm">
+                                    Order: #{{ $slider->sort_order }}
+                                </span>
+                                @if($slider->is_active)
+                                    <span class="badge bg-success text-white rounded-pill px-2.5 py-1 extra-small fw-semibold shadow-sm">
+                                        Active
+                                    </span>
+                                @else
+                                    <span class="badge bg-secondary text-white rounded-pill px-2.5 py-1 extra-small fw-semibold shadow-sm">
+                                        Inactive
+                                    </span>
+                                @endif
                             </div>
-                        </td>
-                    </tr>
-                @empty
-                    <tr>
-                        <td colspan="5" class="px-4 py-5 text-center text-muted">
-                            <p class="small mb-0">No sliders found.</p>
-                        </td>
-                    </tr>
-                @endforelse
-            </tbody>
-        </table>
+                        </div>
+
+                        <!-- Card Body -->
+                        <div class="card-body p-3 d-flex flex-column justify-content-between">
+                            <div>
+                                <h3 class="h6 fw-bold text-dark mb-1 text-truncate" title="{{ $slider->title }}">
+                                    {{ $slider->title ?: 'No Title' }}
+                                </h3>
+                                <div class="text-muted extra-small d-flex align-items-center gap-1">
+                                    <svg style="width: 0.8rem; height: 0.8rem;" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"/>
+                                    </svg>
+                                    <span>Added {{ $slider->created_at ? $slider->created_at->diffForHumans() : 'Recently' }}</span>
+                                </div>
+                            </div>
+
+                            <hr class="my-3 opacity-25">
+
+                            <!-- Action Buttons -->
+                            <div class="d-flex align-items-center justify-content-between gap-2">
+                                <button wire:click="editSlider({{ $slider->id }})" 
+                                        class="btn btn-outline-primary btn-sm rounded-pill px-3 py-1 flex-grow-1 d-inline-flex align-items-center justify-content-center gap-1" 
+                                        style="font-size: 0.8rem;">
+                                    <svg style="width: 0.85rem; height: 0.85rem;" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0 1 15.75 21H5.25A2.25 2.25 0 0 1 3 18.75V8.25A2.25 2.25 0 0 1 5.25 6H10"/>
+                                    </svg>
+                                    <span>Edit</span>
+                                </button>
+                                <button onclick="confirm('Are you sure you want to delete this slider?') || event.stopImmediatePropagation()" 
+                                        wire:click="deleteSlider({{ $slider->id }})" 
+                                        class="btn btn-outline-danger btn-sm rounded-pill px-3 py-1 flex-grow-1 d-inline-flex align-items-center justify-content-center gap-1" 
+                                        style="font-size: 0.8rem;">
+                                    <svg style="width: 0.85rem; height: 0.85rem;" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0"/>
+                                    </svg>
+                                    <span>Remove</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            @empty
+                <div class="col-12 py-5 text-center text-muted w-100">
+                    <div class="py-4">
+                        <svg style="width: 3rem; height: 3rem;" class="text-muted opacity-50 mb-2" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="m2.25 15.75 5.159-5.159a2.25 2.25 0 0 1 3.182 0l5.159 5.159m-1.5-1.5 1.409-1.409a2.25 2.25 0 0 1 3.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 0 0 1.5-1.5V6a1.5 1.5 0 0 0-1.5-1.5H3.75A1.5 1.5 0 0 0 2.25 6v12a1.5 1.5 0 0 0 1.5 1.5Zm10.5-11.25h.008v.008h-.008V8.25Zm.375 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Z"/>
+                        </svg>
+                        <p class="small mb-2 fw-semibold">No sliders found</p>
+                        <p class="extra-small text-muted mb-3">Add image sliders to showcase promotions and banners on the mobile app home screen.</p>
+                        <button wire:click="addSlider" class="btn btn-primary btn-sm rounded-pill px-4">Add First Slider</button>
+                    </div>
+                </div>
+            @endforelse
+        </div>
     </div>
 
     <!-- Pagination -->
@@ -262,4 +296,14 @@ new class extends Component {
         });
     </script>
     @endscript
+
+    <style>
+        .slider-card {
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+        .slider-card:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 0.75rem 1.5rem rgba(0, 0, 0, 0.08) !important;
+        }
+    </style>
 </div>
