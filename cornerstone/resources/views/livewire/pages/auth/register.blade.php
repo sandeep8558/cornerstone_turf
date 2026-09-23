@@ -31,7 +31,7 @@ new #[Layout('layouts.guest')] class extends Component
 
         $user->assignRole('Client');
 
-        Auth::login($user);
+        Auth::login($user, remember: true);
 
         $this->redirect(route('dashboard', absolute: false));
     }
