@@ -1737,102 +1737,7 @@ class _TurfDetailScreenState extends State<TurfDetailScreen> {
                                 ),
                               )
                             else
-                              SizedBox(
-                                height: 80,
-                                child: ListView.builder(
-                                  scrollDirection: Axis.horizontal,
-                                  itemCount:
-                                      int.tryParse(
-                                        _bookingController
-                                                .systemSettings['booking_open_days']
-                                                ?.toString() ??
-                                            '14',
-                                      ) ??
-                                      14,
-                                  itemBuilder: (context, index) {
-                                    DateTime date = DateTime.now().add(
-                                      Duration(days: index),
-                                    );
-                                    bool isSelected =
-                                        DateFormat('yyyy-MM-dd').format(date) ==
-                                        DateFormat(
-                                          'yyyy-MM-dd',
-                                        ).format(_selectedDate);
-
-                                    return GestureDetector(
-                                      onTap: () {
-                                        setState(() {
-                                          _selectedDate = date;
-                                          _selectedSlotIds.clear();
-                                          _totalAmount = 0;
-                                        });
-                                        _fetchSlots();
-                                      },
-                                      child: Container(
-                                        width: 65,
-                                        margin: const EdgeInsets.only(
-                                          right: 12,
-                                        ),
-                                        decoration: BoxDecoration(
-                                          color: isSelected
-                                              ? AppColors.primary
-                                              : AppColors.cardBg,
-                                          borderRadius: BorderRadius.circular(
-                                            15,
-                                          ),
-                                          border: isSelected
-                                              ? null
-                                              : Border.all(
-                                                  color: AppColors.green200,
-                                                ),
-                                        ),
-                                        child: Column(
-                                          mainAxisAlignment:
-                                              MainAxisAlignment.center,
-                                          children: [
-                                            Text(
-                                              DateFormat(
-                                                'EEE',
-                                              ).format(date).toUpperCase(),
-                                              style: TextStyle(
-                                                color: isSelected
-                                                    ? Colors.white
-                                                    : AppColors.textMain,
-                                                fontSize: 10,
-                                                fontWeight: FontWeight.bold,
-                                              ),
-                                            ),
-                                            const SizedBox(height: 2),
-                                            Text(
-                                              DateFormat('dd').format(date),
-                                              style: TextStyle(
-                                                color: isSelected
-                                                    ? Colors.white
-                                                    : AppColors.textMain,
-                                                fontSize: 18,
-                                                fontWeight: FontWeight.bold,
-                                              ),
-                                            ),
-                                            const SizedBox(height: 2),
-                                            Text(
-                                              DateFormat(
-                                                'MMM',
-                                              ).format(date).toUpperCase(),
-                                              style: TextStyle(
-                                                color: isSelected
-                                                    ? Colors.white
-                                                    : AppColors.textMain,
-                                                fontSize: 10,
-                                                fontWeight: FontWeight.bold,
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                    );
-                                  },
-                                ),
-                              ),
+                              _buildDayDateSelector(),
                           ],
                         ),
                       ),
@@ -2665,6 +2570,230 @@ class _TurfDetailScreenState extends State<TurfDetailScreen> {
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildDayDateSelector() {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final selectedDay =
+        DateTime(_selectedDate.year, _selectedDate.month, _selectedDate.day);
+    final isToday = selectedDay.isAtSameMomentAs(today);
+    final canGoPrevious = selectedDay.isAfter(today);
+
+    final int openDays = int.tryParse(
+          _bookingController.systemSettings['booking_open_days']?.toString() ??
+              '14',
+        ) ??
+        14;
+    final maxDate = today.add(Duration(days: openDays - 1));
+    final canGoNext = selectedDay.isBefore(maxDate);
+
+    return Row(
+      children: [
+        // Previous Date Button (<) - Disabled if today or before (cannot book past dates)
+        Material(
+          color: canGoPrevious ? Colors.white : Colors.white.withOpacity(0.6),
+          borderRadius: BorderRadius.circular(12),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(12),
+            onTap: canGoPrevious
+                ? () {
+                    setState(() {
+                      _selectedDate =
+                          _selectedDate.subtract(const Duration(days: 1));
+                      _selectedSlotIds.clear();
+                      _totalAmount = 0;
+                    });
+                    _fetchSlots();
+                  }
+                : null,
+            child: Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color:
+                      canGoPrevious ? AppColors.green200 : Colors.grey.shade300,
+                ),
+              ),
+              child: Icon(
+                Icons.chevron_left_rounded,
+                color: canGoPrevious ? AppColors.primary : Colors.grey.shade400,
+                size: 28,
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(width: 8),
+
+        // Center Date Display Card (Clickable to pick date, starting from Today)
+        Expanded(
+          child: Material(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(12),
+            child: InkWell(
+              borderRadius: BorderRadius.circular(12),
+              onTap: () async {
+                final DateTime? picked = await showDatePicker(
+                  context: context,
+                  initialDate:
+                      _selectedDate.isBefore(today) ? today : _selectedDate,
+                  firstDate: today, // Cannot book for previous dates
+                  lastDate: maxDate,
+                  builder: (context, child) {
+                    return Theme(
+                      data: Theme.of(context).copyWith(
+                        colorScheme: const ColorScheme.light(
+                          primary: AppColors.primary,
+                          onPrimary: Colors.white,
+                          surface: Colors.white,
+                          onSurface: AppColors.textMain,
+                        ),
+                      ),
+                      child: child!,
+                    );
+                  },
+                );
+                if (picked != null && picked != _selectedDate) {
+                  setState(() {
+                    _selectedDate = picked;
+                    _selectedSlotIds.clear();
+                    _totalAmount = 0;
+                  });
+                  _fetchSlots();
+                }
+              },
+              child: Container(
+                height: 44,
+                padding: const EdgeInsets.symmetric(horizontal: 10),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: isToday ? AppColors.primary : AppColors.green200,
+                    width: isToday ? 1.5 : 1,
+                  ),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      Icons.calendar_today_rounded,
+                      size: 16,
+                      color:
+                          isToday ? AppColors.primary : AppColors.textSecondary,
+                    ),
+                    const SizedBox(width: 6),
+                    Flexible(
+                      child: Text(
+                        isToday
+                            ? 'Today, ${DateFormat('dd MMM yyyy').format(_selectedDate)}'
+                            : DateFormat('EEE, dd MMM yyyy')
+                                .format(_selectedDate),
+                        style: TextStyle(
+                          color:
+                              isToday ? AppColors.primary : AppColors.textMain,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 13,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    const SizedBox(width: 2),
+                    const Icon(
+                      Icons.arrow_drop_down,
+                      color: AppColors.textSecondary,
+                      size: 18,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(width: 8),
+
+        // Next Date Button (>) - Disabled if reached max booking days
+        Material(
+          color: canGoNext ? Colors.white : Colors.white.withOpacity(0.6),
+          borderRadius: BorderRadius.circular(12),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(12),
+            onTap: canGoNext
+                ? () {
+                    setState(() {
+                      _selectedDate =
+                          _selectedDate.add(const Duration(days: 1));
+                      _selectedSlotIds.clear();
+                      _totalAmount = 0;
+                    });
+                    _fetchSlots();
+                  }
+                : null,
+            child: Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: canGoNext ? AppColors.green200 : Colors.grey.shade300,
+                ),
+              ),
+              child: Icon(
+                Icons.chevron_right_rounded,
+                color: canGoNext ? AppColors.primary : Colors.grey.shade400,
+                size: 28,
+              ),
+            ),
+          ),
+        ),
+
+        // Quick 'Today' Button if looking at a future date
+        if (!isToday) ...[
+          const SizedBox(width: 8),
+          Material(
+            color: AppColors.primary,
+            borderRadius: BorderRadius.circular(12),
+            elevation: 1,
+            child: InkWell(
+              borderRadius: BorderRadius.circular(12),
+              onTap: () {
+                setState(() {
+                  _selectedDate = DateTime.now();
+                  _selectedSlotIds.clear();
+                  _totalAmount = 0;
+                });
+                _fetchSlots();
+              },
+              child: Container(
+                height: 44,
+                padding: const EdgeInsets.symmetric(horizontal: 10),
+                alignment: Alignment.center,
+                child: const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.today_rounded,
+                      color: Colors.white,
+                      size: 15,
+                    ),
+                    SizedBox(width: 4),
+                    Text(
+                      'Today',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
+      ],
     );
   }
 
