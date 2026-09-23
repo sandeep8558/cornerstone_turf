@@ -1,0 +1,131 @@
+// 1. Include functions
+@import "bootstrap/scss/functions";
+
+// 2. Variable overrides
+// The brand uses a vibrant green as its primary and success color
+$primary: #16a34a;
+$success: #16a34a;
+
+// Brand color tokens (referenced in custom styles)
+$cs-green-50:  #f0fdf4;
+$cs-green-100: #dcfce7;
+$cs-green-200: #bbf7d0;
+$cs-green-600: #16a34a;
+$cs-green-700: #15803d;
+$cs-green-800: #166534;
+
+// 3. Include remaining Bootstrap
+@import "bootstrap/scss/bootstrap";
+
+/* ── Typography ── */
+body {
+    font-family: 'Figtree', sans-serif;
+}
+
+/* ── Utility classes for brand colors ── */
+.bg-green-subtle   { background-color: $cs-green-100 !important; }
+.border-green      { border-color: $cs-green-200 !important; }
+.text-green-600    { color: $cs-green-600 !important; }
+
+/* ─────────────────────────────────────────
+   Admin sidebar nav links
+───────────────────────────────────────── */
+.sidebar-nav-link {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.625rem 0.75rem;
+    border-radius: 0.5rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: $cs-green-800;
+    text-decoration: none;
+    transition: background-color 0.15s, color 0.15s;
+    white-space: nowrap;
+    overflow: hidden;
+
+    &:hover {
+        background-color: $cs-green-200;
+        color: #111827;
+    }
+
+    &.active {
+        background-color: $cs-green-600;
+        color: #ffffff;
+
+        &:hover {
+            background-color: $cs-green-700;
+        }
+    }
+}
+
+/* ─────────────────────────────────────────
+   Admin sidebar layout
+───────────────────────────────────────── */
+.admin-sidebar {
+    width: 280px;
+    min-width: 280px;
+}
+
+@media (max-width: 1023px) {
+    .admin-sidebar {
+        position: fixed;
+        top: 0; bottom: 0; left: 0;
+        z-index: 2000;
+        transform: translateX(-100%);
+        transition: transform 0.3s ease-in-out;
+        box-shadow: 0 0.5rem 1rem rgba(0,0,0,0.15);
+
+        &.drawer-open {
+            transform: translateX(0) !important;
+        }
+    }
+}
+
+@media (min-width: 1024px) {
+    .admin-sidebar {
+        position: sticky;
+        top: 0;
+        height: 100vh;
+        flex-shrink: 0;
+    }
+}
+
+/* ─────────────────────────────────────────
+   Alpine-powered modal backdrop
+───────────────────────────────────────── */
+.modal-alpine-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 1050;
+    overflow-y: auto;
+    padding: 1.5rem 1rem;
+}
+.modal-alpine-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(107, 114, 128, 0.75);
+}
+.modal-alpine-dialog {
+    position: relative;
+    z-index: 1055;
+    margin: 1.75rem auto;
+    max-width: 42rem;
+
+    &.modal-sm { max-width: 24rem; }
+    &.modal-lg { max-width: 56rem; }
+}
+
+/* ─────────────────────────────────────────
+   Form focus ring — green accent
+───────────────────────────────────────── */
+.form-control:focus,
+.form-select:focus {
+    border-color: $cs-green-600;
+    box-shadow: 0 0 0 0.25rem rgba(22, 163, 74, 0.2);
+}
+
+/* ─────────────────────────────────────────
+   Navbar brand / logo height
+───────────────────────────────────────── */
+.navbar-brand img { height: 2.5rem; width: auto; }
