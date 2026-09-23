@@ -165,36 +165,67 @@ class LoginScreen extends StatelessWidget {
                                 ),
                           ),
                         )),
+                        
+                        const SizedBox(height: 20),
+                        
+                        // OR Divider
+                        Row(
+                          children: [
+                            const Expanded(
+                              child: Divider(color: AppColors.green200, thickness: 1),
+                            ),
+                            Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 12),
+                              child: Text(
+                                'OR',
+                                style: GoogleFonts.inter(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                  color: AppColors.textSecondary,
+                                ),
+                              ),
+                            ),
+                            const Expanded(
+                              child: Divider(color: AppColors.green200, thickness: 1),
+                            ),
+                          ],
+                        ),
+                        
+                        const SizedBox(height: 20),
+                        
+                        // Create New Account Button
+                        SizedBox(
+                          width: double.infinity,
+                          height: 56,
+                          child: OutlinedButton.icon(
+                            onPressed: () => Get.to(() => RegisterScreen()),
+                            icon: const Icon(Icons.person_add_outlined, size: 20),
+                            label: Text(
+                              'Create New Account',
+                              style: GoogleFonts.outfit(
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: AppColors.primary,
+                              side: const BorderSide(
+                                color: AppColors.primary,
+                                width: 1.5,
+                              ),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(16),
+                              ),
+                              backgroundColor: AppColors.primary.withOpacity(0.04),
+                            ),
+                          ),
+                        ),
                       ],
                     ),
                   ),
                 ),
                 
-                const SizedBox(height: 24),
-                Center(
-                  child: FadeIn(
-                    delay: const Duration(milliseconds: 800),
-                    child: TextButton(
-                      onPressed: () => Get.to(() => RegisterScreen()),
-                      child: RichText(
-                        text: TextSpan(
-                          text: "Don't have an account? ",
-                          style: GoogleFonts.inter(color: AppColors.textSecondary),
-                          children: [
-                            TextSpan(
-                              text: 'Register',
-                              style: GoogleFonts.inter(
-                                color: AppColors.primary,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 40),
+                const SizedBox(height: 30),
               ],
             ),
           ),
