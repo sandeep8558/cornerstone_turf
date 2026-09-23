@@ -517,6 +517,7 @@ class _TurfDetailScreenState extends State<TurfDetailScreen> {
                               child: TextField(
                                 controller: sheetCouponController,
                                 enabled: !allCovered && !_bookingController.isCouponLoading.value,
+                                scrollPadding: const EdgeInsets.only(bottom: 100),
                                 textCapitalization: TextCapitalization.characters,
                                 inputFormatters: [
                                   TextInputFormatter.withFunction(
@@ -2023,6 +2024,7 @@ class _TurfDetailScreenState extends State<TurfDetailScreen> {
                   child: TextField(
                     controller: _couponController,
                     enabled: !hasCoupon,
+                    scrollPadding: const EdgeInsets.only(bottom: 140),
                     textCapitalization: TextCapitalization.characters,
                     inputFormatters: [
                       TextInputFormatter.withFunction(
@@ -2095,6 +2097,9 @@ class _TurfDetailScreenState extends State<TurfDetailScreen> {
   }
 
   Widget _buildBottomBar() {
+    final isKeyboardOpen = MediaQuery.of(context).viewInsets.bottom > 0;
+    if (isKeyboardOpen) return const SizedBox.shrink();
+
     return Positioned(
       bottom: 0,
       left: 0,
