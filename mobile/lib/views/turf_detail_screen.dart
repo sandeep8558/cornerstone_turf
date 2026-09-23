@@ -878,13 +878,12 @@ class _TurfDetailScreenState extends State<TurfDetailScreen> {
     Get.bottomSheet(
       Padding(
         padding: EdgeInsets.only(bottom: MediaQuery.of(Get.context!).viewInsets.bottom),
-        child: Container(
-          padding: const EdgeInsets.all(20),
-          decoration: const BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(25)),
-          ),
-          child: StatefulBuilder(
+        child: Material(
+          color: Colors.white,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(25)),
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: StatefulBuilder(
             builder: (BuildContext context, StateSetter dialogSetState) {
               double additionalDiscount = double.tryParse(_additionalDiscountController.text) ?? 0.0;
               double calculatedFinalAmount = (finalAmount - additionalDiscount).clamp(0.0, finalAmount);
@@ -1060,8 +1059,9 @@ class _TurfDetailScreenState extends State<TurfDetailScreen> {
           ),
         ),
       ),
-      isScrollControlled: true,
-    );
+    ),
+    isScrollControlled: true,
+  );
   }
 
   Widget _buildPaymentOption({
@@ -1070,25 +1070,34 @@ class _TurfDetailScreenState extends State<TurfDetailScreen> {
     required String subtitle,
     required VoidCallback onTap,
   }) {
-    return ListTile(
-      leading: CircleAvatar(
-        backgroundColor: Colors.white10,
-        child: Icon(icon, color: AppColors.primary),
+    return Material(
+      color: AppColors.green50,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(15),
+        side: const BorderSide(color: AppColors.green200),
       ),
-      title: Text(
-        title,
-        style: const TextStyle(
-          color: AppColors.textMain,
-          fontWeight: FontWeight.bold,
+      clipBehavior: Clip.antiAlias,
+      child: ListTile(
+        leading: CircleAvatar(
+          backgroundColor: Colors.white,
+          child: Icon(icon, color: AppColors.primary),
+        ),
+        title: Text(
+          title,
+          style: const TextStyle(
+            color: AppColors.textMain,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        subtitle: Text(
+          subtitle,
+          style: const TextStyle(color: AppColors.textSecondary, fontSize: 12),
+        ),
+        onTap: onTap,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(15),
         ),
       ),
-      subtitle: Text(
-        subtitle,
-        style: const TextStyle(color: AppColors.textSecondary, fontSize: 12),
-      ),
-      onTap: onTap,
-      tileColor: AppColors.green50,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15), side: const BorderSide(color: AppColors.green200)),
     );
   }
 
