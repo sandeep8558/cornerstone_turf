@@ -34,21 +34,44 @@ new class extends Component {
     public function mount()
     {
         $this->selected_date = Carbon::today()->toDateString();
-        $this->base_date = Carbon::today();
+        $this->base_date = Carbon::today()->toDateString();
         $this->generateDates();
+    }
+
+    protected function getBaseCarbon(): Carbon
+    {
+        return $this->base_date ? Carbon::parse($this->base_date) : Carbon::today();
     }
 
     public function generateDates()
     {
+        $base = $this->getBaseCarbon();
         $this->dates = [];
-        $current = clone $this->base_date;
-        // Show 7 days starting from base_date
+        $current = $base->copy();
+        $dateStrings = [];
         for ($i = 0; $i < 7; $i++) {
+            $dateStrings[] = $current->toDateString();
+            $current->addDay();
+        }
+
+        $counts = Booking::whereIn('date', $dateStrings)
+            ->whereIn('status', ['Success', 'Cancelled'])
+            ->selectRaw('date, count(*) as count')
+            ->groupBy('date')
+            ->pluck('count', 'date')
+            ->toArray();
+
+        $todayStr = Carbon::today()->toDateString();
+        $current = $base->copy();
+        for ($i = 0; $i < 7; $i++) {
+            $full = $current->toDateString();
             $this->dates[] = [
-                'full' => $current->toDateString(),
+                'full' => $full,
                 'day' => $current->format('d'),
                 'short' => $current->format('D'),
                 'month' => $current->format('M'),
+                'is_today' => ($full === $todayStr),
+                'booking_count' => (int) ($counts[$full] ?? 0),
             ];
             $current->addDay();
         }
@@ -56,20 +79,59 @@ new class extends Component {
 
     public function prevRange()
     {
-        $this->base_date = $this->base_date->subDays(7);
+        $this->base_date = $this->getBaseCarbon()->subDays(7)->toDateString();
         $this->generateDates();
     }
 
     public function nextRange()
     {
-        $this->base_date = $this->base_date->addDays(7);
+        $this->base_date = $this->getBaseCarbon()->addDays(7)->toDateString();
         $this->generateDates();
+    }
+
+    public function goToToday()
+    {
+        $today = Carbon::today()->toDateString();
+        $this->selected_date = $today;
+        $this->base_date = $today;
+        $this->generateDates();
+        $this->resetPage();
+    }
+
+    public function updatedSelectedDate($value)
+    {
+        if ($value) {
+            try {
+                $this->base_date = Carbon::parse($value)->toDateString();
+                $this->generateDates();
+                $this->resetPage();
+            } catch (\Exception $e) {
+                // Ignore parse errors
+            }
+        }
     }
 
     public function selectDate($date)
     {
         $this->selected_date = $date;
         $this->resetPage();
+    }
+
+    public function getRangeTitleProperty()
+    {
+        $start = $this->getBaseCarbon();
+        $end = $start->copy()->addDays(6);
+        if ($start->format('M Y') === $end->format('M Y')) {
+            return $start->format('F Y');
+        }
+        return $start->format('M Y') . ' — ' . $end->format('M Y');
+    }
+
+    public function getRangeSubtitleProperty()
+    {
+        $start = $this->getBaseCarbon();
+        $end = $start->copy()->addDays(6);
+        return $start->format('D, M d') . ' – ' . $end->format('D, M d, Y');
     }
 
     // --- Payment Logic ---
@@ -242,40 +304,162 @@ new class extends Component {
         </div>
     @endif
 
-    <!-- Horizontal Date Picker -->
-    <div class="card border-0 shadow-sm rounded-4 overflow-hidden mb-4">
-        <div class="card-body p-4">
-            <div class="d-flex justify-content-center align-items-center gap-3">
-                <!-- Left Arrow -->
-                <button wire:click="prevRange"
-                    class="flex-shrink-0 border-0 rounded-4 p-3 d-flex align-items-center justify-content-center transition-all bg-light text-muted"
-                    style="width: 4.5rem; height: 4.5rem;">
-                    <svg style="width: 1.5rem; height: 1.5rem;" fill="none" stroke="currentColor" stroke-width="2.5"
-                        viewBox="0 0 24 24">
+    <!-- Scoped Styles for Modern Date Picker -->
+    <style>
+        .date-card-item {
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .date-card-item:hover:not(.active-date-card) {
+            border-color: #86efac !important;
+            background-color: #f0fdf4 !important;
+            transform: translateY(-2px);
+            box-shadow: 0 6px 16px -2px rgba(22, 163, 74, 0.15) !important;
+        }
+        .date-nav-btn {
+            transition: all 0.15s ease;
+            background-color: #ffffff;
+            color: #475569;
+        }
+        .date-nav-btn:hover {
+            background-color: #16a34a !important;
+            color: #ffffff !important;
+            border-color: #16a34a !important;
+            transform: scale(1.06);
+            box-shadow: 0 4px 12px rgba(22, 163, 74, 0.25) !important;
+        }
+        .date-strip-container::-webkit-scrollbar {
+            display: none;
+        }
+        .date-strip-container {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+    </style>
+
+    <!-- Modern Horizontal Date Picker -->
+    <div class="card border-0 shadow-sm rounded-4 overflow-hidden mb-4 bg-white">
+        <div class="card-body p-3 p-md-4">
+            <!-- Header: Date Context & Action Controls -->
+            <div class="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-3 pb-3 border-bottom border-light-subtle">
+                <!-- Left: Calendar Icon + Month/Year + Date Range -->
+                <div class="d-flex align-items-center gap-3">
+                    <div class="d-flex align-items-center justify-content-center rounded-3 shadow-xs"
+                        style="width: 2.75rem; height: 2.75rem; background: #ecfdf5; color: #16a34a;">
+                        <svg style="width: 1.35rem; height: 1.35rem;" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5" />
+                        </svg>
+                    </div>
+                    <div>
+                        <h5 class="fw-bold mb-0 text-dark">
+                            {{ $this->range_title }}
+                        </h5>
+                        <div class="text-muted extra-small fw-medium">
+                            {{ $this->range_subtitle }}
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Right: Quick Jump Actions -->
+                <div class="d-flex align-items-center gap-2 ms-auto">
+                    <!-- "Today" quick button -->
+                    <button type="button" wire:click="goToToday"
+                        class="btn btn-sm rounded-pill px-3 d-inline-flex align-items-center gap-1.5 fw-medium {{ $selected_date === Carbon::today()->toDateString() ? 'btn-success text-white shadow-xs' : 'btn-outline-secondary' }}"
+                        style="font-size: 0.8125rem;">
+                        <svg style="width: 0.95rem; height: 0.95rem;" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        <span>Today</span>
+                    </button>
+
+                    <!-- Direct Calendar Date Picker -->
+                    <div class="position-relative">
+                        <input type="date" wire:model.live="selected_date"
+                            class="form-control form-control-sm rounded-pill px-3 text-secondary border-secondary-subtle"
+                            style="font-size: 0.8125rem; height: 32px;"
+                            title="Jump to date">
+                    </div>
+                </div>
+            </div>
+
+            <!-- Main Row: Left Chevron + 7 Date Cards + Right Chevron -->
+            <div class="d-flex align-items-center gap-2 gap-md-3">
+                <!-- Previous 7 Days Arrow -->
+                <button type="button" wire:click="prevRange"
+                    class="flex-shrink-0 btn btn-light border border-secondary-subtle rounded-circle p-0 d-flex align-items-center justify-content-center shadow-xs date-nav-btn"
+                    style="width: 2.75rem; height: 2.75rem;"
+                    title="Previous 7 days"
+                    aria-label="Previous 7 days">
+                    <svg style="width: 1.25rem; height: 1.25rem;" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
                     </svg>
                 </button>
 
-                <!-- Dates -->
-                <div class="d-flex gap-3 no-scrollbar overflow-x-auto">
+                <!-- 7-Day Cards Strip -->
+                <div class="flex-grow-1 d-flex align-items-stretch gap-2 gap-md-3 overflow-x-auto py-1 px-1 date-strip-container">
                     @foreach($dates as $date)
+                        @php
+                            $isSelected = ($selected_date === $date['full']);
+                        @endphp
                         <button type="button" wire:key="date-{{ $date['full'] }}"
                             wire:click="selectDate('{{ $date['full'] }}')"
-                            class="flex-shrink-0 border-0 rounded-4 p-3 d-flex flex-column align-items-center transition-all"
-                            style="min-width: 4.5rem; {{ $selected_date == $date['full'] ? 'background: #16a34a; color: white; transform: translateY(-4px); box-shadow: 0 4px 12px rgba(22, 163, 74, 0.3);' : 'background: #f8fafc; color: #64748b;' }}">
-                            <span class="extra-small fw-semibold opacity-75">{{ $date['short'] }}</span>
-                            <span class="h4 fw-bold my-1">{{ $date['day'] }}</span>
-                            <span class="extra-small fw-medium opacity-75">{{ $date['month'] }}</span>
+                            class="flex-fill flex-shrink-0 border-0 rounded-4 py-3 px-2 d-flex flex-column align-items-center justify-content-between position-relative date-card-item {{ $isSelected ? 'active-date-card' : '' }}"
+                            style="min-width: 5.25rem; min-height: 6.25rem; cursor: pointer;
+                                {{ $isSelected
+                                    ? 'background: linear-gradient(135deg, #16a34a 0%, #15803d 100%); color: #ffffff; box-shadow: 0 10px 22px -3px rgba(22, 163, 74, 0.4); transform: translateY(-3px);'
+                                    : 'background: #ffffff; border: 1px solid #e2e8f0; color: #1e293b; box-shadow: 0 1px 3px rgba(0,0,0,0.03);' }}">
+                            
+                            <!-- Day of week or Today badge -->
+                            <div class="mb-1 w-100 text-center">
+                                @if($date['is_today'])
+                                    <span class="badge rounded-pill fw-bold {{ $isSelected ? 'bg-white text-success' : 'bg-success-subtle text-success border border-success-subtle' }}"
+                                        style="font-size: 0.65rem; padding: 2px 7px; letter-spacing: 0.5px;">
+                                        TODAY
+                                    </span>
+                                @else
+                                    <span class="text-uppercase fw-semibold {{ $isSelected ? 'text-white-50' : 'text-secondary' }}"
+                                        style="font-size: 0.725rem; letter-spacing: 0.75px;">
+                                        {{ $date['short'] }}
+                                    </span>
+                                @endif
+                            </div>
+
+                            <!-- Day Number -->
+                            <div class="my-1">
+                                <span class="fw-bold {{ $isSelected ? 'text-white' : 'text-dark' }}" style="font-size: 1.55rem; line-height: 1;">
+                                    {{ $date['day'] }}
+                                </span>
+                            </div>
+
+                            <!-- Month and Bookings Count -->
+                            <div class="d-flex flex-column align-items-center gap-1 w-100 mt-1">
+                                <span class="fw-medium {{ $isSelected ? 'text-white-50' : 'text-muted' }}" style="font-size: 0.725rem;">
+                                    {{ $date['month'] }}
+                                </span>
+
+                                @if($date['booking_count'] > 0)
+                                    <span class="badge rounded-pill d-inline-flex align-items-center gap-1 {{ $isSelected ? 'bg-white bg-opacity-25 text-white' : 'bg-success-subtle text-success border border-success-subtle' }}"
+                                        style="font-size: 0.65rem; padding: 2px 7px;"
+                                        title="{{ $date['booking_count'] }} booking{{ $date['booking_count'] > 1 ? 's' : '' }}">
+                                        <span class="rounded-circle {{ $isSelected ? 'bg-white' : 'bg-success' }}" style="width: 5px; height: 5px;"></span>
+                                        <span>{{ $date['booking_count'] }} {{ $date['booking_count'] === 1 ? 'booking' : 'bookings' }}</span>
+                                    </span>
+                                @else
+                                    <span class="extra-small {{ $isSelected ? 'text-white-50' : 'text-muted' }}" style="font-size: 0.65rem; opacity: 0.6;">
+                                        0 bookings
+                                    </span>
+                                @endif
+                            </div>
                         </button>
                     @endforeach
                 </div>
 
-                <!-- Right Arrow -->
-                <button wire:click="nextRange"
-                    class="flex-shrink-0 border-0 rounded-4 p-3 d-flex align-items-center justify-content-center transition-all bg-light text-muted"
-                    style="width: 4.5rem; height: 4.5rem;">
-                    <svg style="width: 1.5rem; height: 1.5rem;" fill="none" stroke="currentColor" stroke-width="2.5"
-                        viewBox="0 0 24 24">
+                <!-- Next 7 Days Arrow -->
+                <button type="button" wire:click="nextRange"
+                    class="flex-shrink-0 btn btn-light border border-secondary-subtle rounded-circle p-0 d-flex align-items-center justify-content-center shadow-xs date-nav-btn"
+                    style="width: 2.75rem; height: 2.75rem;"
+                    title="Next 7 days"
+                    aria-label="Next 7 days">
+                    <svg style="width: 1.25rem; height: 1.25rem;" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
                     </svg>
                 </button>
