@@ -169,8 +169,8 @@ class PaymentsManagementTest extends TestCase
         // Component starts with perPage = 15
         $component = Volt::test('administrator.payments-management')
             ->assertSet('perPage', 15)
-            ->assertSee('Loading more payments')
-            ->assertSee('showing 15 of 20')
+            ->assertSee('Load More Payments')
+            ->assertSee('15 of 20')
             ->call('loadMore')
             ->assertSet('perPage', 30)
             ->assertSee('Showing all 20 payments');

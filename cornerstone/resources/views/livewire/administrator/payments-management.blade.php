@@ -173,13 +173,38 @@ new class extends Component {
             </table>
         </div>
         @if($payments->hasMorePages())
-            <div wire:intersect.margin.200px="loadMore" class="card-footer bg-white border-top-0 py-4 text-center">
-                <div class="d-inline-flex align-items-center gap-2 text-muted small py-2 px-3 bg-light rounded-pill border shadow-xs">
-                    <div class="spinner-border spinner-border-sm text-success" role="status">
-                        <span class="visually-hidden">Loading...</span>
-                    </div>
-                    <span>Loading more payments (showing {{ $payments->count() }} of {{ $payments->total() }})...</span>
-                </div>
+            <div x-data="{
+                    loading: false,
+                    observe() {
+                        const observer = new IntersectionObserver((entries) => {
+                            if (entries[0].isIntersecting && !this.loading) {
+                                this.loading = true;
+                                $wire.loadMore().then(() => {
+                                    this.loading = false;
+                                }).catch(() => {
+                                    this.loading = false;
+                                });
+                            }
+                        }, { rootMargin: '250px' });
+                        observer.observe($el);
+                    }
+                }" 
+                x-init="observe()" 
+                class="card-footer bg-white border-top-0 py-4 text-center">
+                
+                <button wire:click="loadMore" wire:loading.attr="disabled"
+                    class="btn btn-sm btn-outline-success rounded-pill px-4 py-2 fw-semibold d-inline-flex align-items-center gap-2 shadow-xs transition-all">
+                    <span wire:loading.remove wire:target="loadMore" class="d-inline-flex align-items-center gap-2">
+                        <svg style="width: 1rem; height: 1rem;" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 13.5L12 21m0 0l-7.5-7.5M12 21V3" />
+                        </svg>
+                        <span>Load More Payments ({{ $payments->count() }} of {{ $payments->total() }})</span>
+                    </span>
+                    <span wire:loading wire:target="loadMore" class="d-inline-flex align-items-center gap-2">
+                        <span class="spinner-border spinner-border-sm text-success" role="status" aria-hidden="true"></span>
+                        <span>Loading more payments...</span>
+                    </span>
+                </button>
             </div>
         @else
             @if($payments->total() > 0)
