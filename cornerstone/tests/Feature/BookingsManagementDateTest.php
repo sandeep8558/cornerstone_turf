@@ -33,7 +33,7 @@ class BookingsManagementDateTest extends TestCase
             ->assertSeeVolt('administrator.bookings-management');
     }
 
-    public function test_bookings_component_mounts_with_current_date_and_7_day_strip(): void
+    public function test_bookings_component_mounts_with_current_date(): void
     {
         $admin = User::factory()->create();
         $admin->assignRole('Administrator');
@@ -41,36 +41,28 @@ class BookingsManagementDateTest extends TestCase
 
         $today = Carbon::today()->toDateString();
 
-        $component = Volt::test('administrator.bookings-management')
+        Volt::test('administrator.bookings-management')
             ->assertSet('selected_date', $today)
-            ->assertSet('base_date', $today);
-
-        $dates = $component->get('dates');
-        $this->assertCount(7, $dates);
-        $this->assertEquals($today, $dates[0]['full']);
-        $this->assertTrue($dates[0]['is_today']);
+            ->assertSee('Today, ' . Carbon::today()->format('d M Y'));
     }
 
-    public function test_prev_and_next_range_navigation(): void
+    public function test_prev_and_next_day_navigation(): void
     {
         $admin = User::factory()->create();
         $admin->assignRole('Administrator');
         $this->actingAs($admin);
 
         $today = Carbon::today();
-        $expectedNext = $today->copy()->addDays(7)->toDateString();
-        $expectedPrev = $today->copy()->subDays(7)->toDateString();
+        $expectedNext = $today->copy()->addDay()->toDateString();
+        $expectedPrev = $today->copy()->subDay()->toDateString();
 
         $component = Volt::test('administrator.bookings-management')
-            ->call('nextRange')
-            ->assertSet('base_date', $expectedNext);
+            ->call('nextDay')
+            ->assertSet('selected_date', $expectedNext);
 
-        $dates = $component->get('dates');
-        $this->assertEquals($expectedNext, $dates[0]['full']);
-
-        $component->call('prevRange')
-            ->call('prevRange')
-            ->assertSet('base_date', $expectedPrev);
+        $component->call('prevDay')
+            ->call('prevDay')
+            ->assertSet('selected_date', $expectedPrev);
     }
 
     public function test_go_to_today_and_select_date(): void
@@ -80,14 +72,13 @@ class BookingsManagementDateTest extends TestCase
         $this->actingAs($admin);
 
         $today = Carbon::today()->toDateString();
-        $otherDate = Carbon::today()->addDays(3)->toDateString();
+        $otherDate = Carbon::today()->addDays(5)->toDateString();
 
         $component = Volt::test('administrator.bookings-management')
-            ->call('nextRange')
+            ->call('nextDay')
             ->call('selectDate', $otherDate)
             ->assertSet('selected_date', $otherDate)
             ->call('goToToday')
-            ->assertSet('selected_date', $today)
-            ->assertSet('base_date', $today);
+            ->assertSet('selected_date', $today);
     }
 }
