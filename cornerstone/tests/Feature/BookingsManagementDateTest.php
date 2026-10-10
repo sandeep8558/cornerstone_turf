@@ -188,6 +188,9 @@ class BookingsManagementDateTest extends TestCase
         ]);
 
         $component = Volt::test('administrator.bookings-management')
+            ->assertSee('Check-In')
+            ->assertSee('Payment')
+            ->assertSee('Pending')
             ->assertSee('Check In')
             ->assertSee('Collect ₹1,200')
             ->call('openAttendanceModal', $booking->id)
@@ -201,8 +204,9 @@ class BookingsManagementDateTest extends TestCase
         $this->assertEquals('Yes', $booking->came);
         $this->assertEquals(10, $booking->players);
 
-        // Now that came is 'Yes', the component should display 'Checked In'
-        $component->assertSee('Checked In');
+        // Now that came is 'Yes', the component should display 'Checked In' and '10 players'
+        $component->assertSee('Checked In')
+            ->assertSee('10 players');
     }
 }
 

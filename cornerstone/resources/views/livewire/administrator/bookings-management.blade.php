@@ -455,7 +455,8 @@ new class extends Component {
                         <th class="ps-4 py-3 border-0 small fw-bold text-muted text-uppercase"># ID</th>
                         <th class="py-3 border-0 small fw-bold text-muted text-uppercase">Booking Info</th>
                         <th class="py-3 border-0 small fw-bold text-muted text-uppercase">Slots</th>
-                        <th class="py-3 border-0 small fw-bold text-muted text-uppercase text-center">Payment Status</th>
+                        <th class="py-3 border-0 small fw-bold text-muted text-uppercase text-center">Check-In</th>
+                        <th class="py-3 border-0 small fw-bold text-muted text-uppercase text-center">Payment</th>
                         <th class="py-3 border-0 small fw-bold text-muted text-uppercase text-end">Amount</th>
                         <th class="pe-4 py-3 border-0 small fw-bold text-muted text-uppercase text-end">Actions</th>
                     </tr>
@@ -514,37 +515,61 @@ new class extends Component {
                                     <span class="text-muted extra-small">No slots</span>
                                 @endforelse
                             </td>
+                            {{-- Check-In / Attendance Status --}}
                             <td class="text-center">
                                 @if($isCancelled)
-                                    <span class="badge rounded-pill bg-danger-subtle text-danger border border-danger-subtle px-3 py-2">CANCELLED</span>
+                                    <span class="badge rounded-pill bg-light text-muted border px-2 py-1 extra-small">-</span>
+                                @elseif($booking->came === 'Yes')
+                                    <div class="d-inline-flex flex-column align-items-center">
+                                        <span class="badge rounded-pill bg-success-subtle text-success border border-success-subtle px-2.5 py-1 d-inline-flex align-items-center gap-1" style="font-weight: 600; font-size: 0.75rem;">
+                                            <svg style="width: 0.75rem; height: 0.75rem;" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                                            </svg>
+                                            Checked In
+                                        </span>
+                                        @if($booking->players)
+                                            <span class="extra-small text-muted fw-semibold mt-1">
+                                                {{ $booking->players }} {{ Str::plural('player', $booking->players) }}
+                                            </span>
+                                        @endif
+                                    </div>
+                                @else
+                                    <span class="badge rounded-pill bg-secondary-subtle text-secondary border border-secondary-subtle px-2.5 py-1 d-inline-flex align-items-center gap-1" style="font-weight: 500; font-size: 0.75rem;">
+                                        <svg style="width: 0.75rem; height: 0.75rem;" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                        </svg>
+                                        Pending
+                                    </span>
+                                @endif
+                            </td>
+                            {{-- Payment Status (Pure Financial) --}}
+                            <td class="text-center">
+                                @if($isCancelled)
+                                    <span class="badge rounded-pill bg-danger-subtle text-danger border border-danger-subtle px-3 py-1.5 fw-semibold" style="font-size: 0.75rem;">Cancelled</span>
                                     @if($booking->cancelled_at)
                                         <div class="extra-small text-muted mt-1">{{ Carbon::parse($booking->cancelled_at)->format('d M, g:i A') }}</div>
                                     @endif
                                 @elseif($booking->is_fully_paid)
-                                    <span
-                                        class="badge rounded-pill bg-success-subtle text-success border border-success-subtle px-3 py-2">Full
-                                        Payment Received</span>
-                                @elseif($booking->payment_type === 'PayAtLocation')
-                                    <span
-                                        class="badge rounded-pill bg-info-subtle text-info border border-info-subtle px-3 py-2">Pay
-                                        At Location</span>
-                                @else
-                                    <span
-                                        class="badge rounded-pill bg-warning-subtle text-warning border border-warning-subtle px-3 py-2">Part
-                                        Payment
-                                        ({{ number_format(($booking->total_received / $booking->amount) * 100, 0) }}%)</span>
-                                @endif
-
-                                @if(!$isCancelled && $booking->came === 'Yes')
-                                    <div
-                                        class="mt-1 extra-small text-success fw-bold px-1 d-flex align-items-center justify-content-center gap-1">
-                                        <svg style="width: 0.75rem; height: 0.75rem;" fill="currentColor" viewBox="0 0 20 20">
-                                            <path fill-rule="evenodd"
-                                                d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
-                                                clip-rule="evenodd" />
+                                    <span class="badge rounded-pill bg-success-subtle text-success border border-success-subtle px-2.5 py-1 fw-semibold d-inline-flex align-items-center gap-1" style="font-size: 0.75rem;">
+                                        <svg style="width: 0.75rem; height: 0.75rem;" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5" />
                                         </svg>
-                                        {{ $booking->players }} Players Present
-                                    </div>
+                                        Paid
+                                    </span>
+                                    @if($booking->payment_type)
+                                        <div class="extra-small text-muted mt-0.5">{{ $booking->payment_type }}</div>
+                                    @endif
+                                @elseif($booking->payment_type === 'PayAtLocation')
+                                    <span class="badge rounded-pill bg-info-subtle text-info border border-info-subtle px-2.5 py-1 fw-semibold" style="font-size: 0.75rem;">
+                                        Pay At Location
+                                    </span>
+                                @else
+                                    <span class="badge rounded-pill bg-warning-subtle text-warning-emphasis border border-warning-subtle px-2.5 py-1 fw-semibold" style="font-size: 0.75rem;">
+                                        Partial ({{ number_format(($booking->total_received / max($booking->amount, 1)) * 100, 0) }}%)
+                                    </span>
+                                    @if($booking->payment_type)
+                                        <div class="extra-small text-muted mt-0.5">{{ $booking->payment_type }}</div>
+                                    @endif
                                 @endif
                             </td>
                             <td class="text-end">
@@ -624,7 +649,7 @@ new class extends Component {
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="6" class="py-5 text-center">
+                            <td colspan="7" class="py-5 text-center">
                                 <p class="text-muted">No bookings found for this date.</p>
                             </td>
                         </tr>
