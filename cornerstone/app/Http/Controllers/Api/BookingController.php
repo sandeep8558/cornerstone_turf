@@ -13,6 +13,7 @@ use App\Models\Coupon;
 use App\Models\CouponUsage;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Cache;
 use Carbon\Carbon;
 
 class BookingController extends Controller
@@ -653,25 +654,69 @@ class BookingController extends Controller
 
     /**
      * Collect payment for a booking (Manager only).
+     * Protected against duplicate submissions, concurrency races, and over-collection.
      */
     public function collectPayment(Request $request, $id)
     {
         $request->validate([
-            'amount' => 'required|numeric|min:0',
+            'amount' => 'required|numeric|min:0.01',
             'type' => 'required|string',
         ]);
 
-        $booking = Booking::findOrFail($id);
-        
-        $booking->bookingPayments()->create([
-            'amount' => $request->amount,
-            'type' => $request->type,
-        ]);
+        $lock = Cache::lock("collect_payment_{$id}", 5);
 
-        return response()->json([
-            'message' => 'Payment collected successfully',
-            'booking' => $booking->load(['user', 'turf', 'slots', 'location', 'bookingPayments'])
-        ]);
+        try {
+            return $lock->block(3, function () use ($request, $id) {
+                return DB::transaction(function () use ($request, $id) {
+                    $booking = Booking::where('id', $id)->lockForUpdate()->firstOrFail();
+
+                    // Calculate real-time received amount with row lock
+                    $totalReceived = floatval($booking->bookingPayments()->lockForUpdate()->sum('amount'));
+                    $totalAmount = floatval($booking->amount);
+                    $dueAmount = max(0, round($totalAmount - $totalReceived, 2));
+
+                    // 1. Idempotency safeguard: If booking is already fully paid, skip insert & return 200 OK
+                    if ($dueAmount <= 0) {
+                        return response()->json([
+                            'message' => 'Payment already collected (Booking is fully paid)',
+                            'booking' => $booking->load(['user', 'turf', 'slots', 'location', 'bookingPayments']),
+                        ], 200);
+                    }
+
+                    // 2. Over-collection safeguard: Cap amount to remaining balance
+                    $collectAmount = min(round(floatval($request->amount), 2), $dueAmount);
+
+                    if ($collectAmount <= 0) {
+                        return response()->json([
+                            'message' => 'Payment already collected (No balance due)',
+                            'booking' => $booking->load(['user', 'turf', 'slots', 'location', 'bookingPayments']),
+                        ], 200);
+                    }
+
+                    // 3. Record payment safely
+                    $booking->bookingPayments()->create([
+                        'amount' => $collectAmount,
+                        'type' => $request->type,
+                    ]);
+
+                    // Update payment_type to Full if fully paid
+                    if (($totalReceived + $collectAmount) >= $totalAmount) {
+                        $booking->update(['payment_type' => 'Full']);
+                    }
+
+                    return response()->json([
+                        'message' => 'Payment collected successfully',
+                        'booking' => $booking->load(['user', 'turf', 'slots', 'location', 'bookingPayments']),
+                    ], 200);
+                });
+            });
+        } catch (\Illuminate\Contracts\Cache\LockTimeoutException $e) {
+            $booking = Booking::with(['user', 'turf', 'slots', 'location', 'bookingPayments'])->findOrFail($id);
+            return response()->json([
+                'message' => 'Payment is currently being processed',
+                'booking' => $booking,
+            ], 200);
+        }
     }
 
     /**

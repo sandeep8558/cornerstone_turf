@@ -154,25 +154,36 @@ new class extends Component {
     public function savePayment()
     {
         $this->validate([
-            'payment_amount' => 'required|numeric|min:1',
+            'payment_amount' => 'required|numeric|min:0.01',
             'payment_type' => 'required|in:Cash,UPI,App,Other',
         ]);
 
         DB::transaction(function () {
+            $booking = Booking::where('id', $this->activeBooking->id)->lockForUpdate()->firstOrFail();
+            $totalReceived = floatval($booking->bookingPayments()->lockForUpdate()->sum('amount'));
+            $dueAmount = max(0, round(floatval($booking->amount) - $totalReceived, 2));
+
+            if ($dueAmount <= 0) {
+                session()->flash('message', 'Booking is already fully paid.');
+                return;
+            }
+
+            $collectAmount = min(round(floatval($this->payment_amount), 2), $dueAmount);
+
             BookingPayment::create([
-                'booking_id' => $this->activeBooking->id,
-                'amount' => $this->payment_amount,
+                'booking_id' => $booking->id,
+                'amount' => $collectAmount,
                 'type' => $this->payment_type,
             ]);
 
-            // Update booking status if needed (refresh total_received)
-            $this->activeBooking->refresh();
-            if ($this->activeBooking->is_fully_paid) {
-                $this->activeBooking->update(['payment_type' => 'Full']);
+            // Update booking status if fully paid
+            if (($totalReceived + $collectAmount) >= floatval($booking->amount)) {
+                $booking->update(['payment_type' => 'Full']);
             }
+
+            session()->flash('message', 'Payment recorded successfully.');
         });
 
-        session()->flash('message', 'Payment recorded successfully.');
         $this->closeModals();
     }
 
@@ -707,8 +718,14 @@ new class extends Component {
                     @endif
                 </div>
                 <div class="modal-footer border-top p-4">
-                    <button wire:click="savePayment"
-                        class="btn btn-primary w-100 rounded-3 py-2 fw-bold shadow-sm">Record Payment</button>
+                    <button wire:click="savePayment" wire:loading.attr="disabled"
+                        class="btn btn-primary w-100 rounded-3 py-2 fw-bold shadow-sm d-flex align-items-center justify-content-center gap-2">
+                        <span wire:loading.remove wire:target="savePayment">Record Payment</span>
+                        <span wire:loading wire:target="savePayment">
+                            <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                            Recording...
+                        </span>
+                    </button>
                 </div>
             </div>
         </div>
