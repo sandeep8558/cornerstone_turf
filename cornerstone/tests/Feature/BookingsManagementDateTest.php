@@ -154,4 +154,55 @@ class BookingsManagementDateTest extends TestCase
         $this->assertEquals('7:00 PM', $ranges[1]['end_label']);
         $this->assertEquals('1 hr', $ranges[1]['duration']);
     }
+
+    public function test_check_in_modal_and_attendance_flow(): void
+    {
+        $admin = User::factory()->create();
+        $admin->assignRole('Administrator');
+        $this->actingAs($admin);
+
+        $customer = User::factory()->create(['name' => 'Rahul Sharma', 'mobile_number' => '9876543210']);
+
+        $location = \App\Models\Location::create([
+            'name' => 'Main Center',
+            'is_active' => true,
+        ]);
+
+        $turf = Turf::create([
+            'location_id' => $location->id,
+            'name' => 'Main Turf',
+            'turf_type' => 'Synthetic',
+            'is_active' => 'Yes',
+        ]);
+
+        $booking = Booking::create([
+            'user_id' => $customer->id,
+            'location_id' => $location->id,
+            'turf_id' => $turf->id,
+            'date' => Carbon::today()->toDateString(),
+            'amount' => 1200,
+            'payment_type' => 'Offline',
+            'status' => 'Success',
+            'came' => null,
+            'players' => null,
+        ]);
+
+        $component = Volt::test('administrator.bookings-management')
+            ->assertSee('Check In')
+            ->assertSee('Collect ₹1,200')
+            ->call('openAttendanceModal', $booking->id)
+            ->assertSet('showAttendanceModal', true)
+            ->assertSet('came', 'Yes')
+            ->set('players', 10)
+            ->call('saveAttendance')
+            ->assertSet('showAttendanceModal', false);
+
+        $booking->refresh();
+        $this->assertEquals('Yes', $booking->came);
+        $this->assertEquals(10, $booking->players);
+
+        // Now that came is 'Yes', the component should display 'Checked In'
+        $component->assertSee('Checked In');
+    }
 }
+

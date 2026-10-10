@@ -179,9 +179,9 @@ new class extends Component {
     // --- Attendance Logic ---
     public function openAttendanceModal($bookingId)
     {
-        $this->activeBooking = Booking::findOrFail($bookingId);
+        $this->activeBooking = Booking::with(['user', 'turf'])->findOrFail($bookingId);
         $this->players = $this->activeBooking->players;
-        $this->came = $this->activeBooking->came ?? 'No';
+        $this->came = $this->activeBooking->came ?? 'Yes';
         $this->showAttendanceModal = true;
     }
 
@@ -197,7 +197,8 @@ new class extends Component {
             'came' => $this->came,
         ]);
 
-        session()->flash('message', 'Attendance updated.');
+        $statusText = $this->came === 'Yes' ? 'Customer marked as Checked In.' : 'Customer marked as Not Arrived.';
+        session()->flash('message', $statusText);
         $this->closeModals();
     }
 
@@ -561,26 +562,62 @@ new class extends Component {
                                 @endif
                             </td>
                             <td class="pe-4 text-end">
-                                <div class="d-flex justify-content-end gap-2">
+                                <div class="d-flex align-items-center justify-content-end gap-1.5 flex-wrap">
                                     @if(!$isCancelled)
-                                        <button wire:click="openPaymentModal({{ $booking->id }})"
-                                            class="btn btn-sm btn-outline-success rounded-3 @if($booking->is_fully_paid) disabled @endif"
-                                            @if($booking->is_fully_paid) disabled title="Full payment already received" @endif>
-                                            Collect
-                                        </button>
-                                        <button wire:click="openAttendanceModal({{ $booking->id }})"
-                                            class="btn btn-sm btn-outline-primary rounded-3">
-                                            Status
-                                        </button>
+                                        {{-- 1. Collect Due (Only shown if payment is pending) --}}
+                                        @if(!$booking->is_fully_paid)
+                                            @php $dueAmount = $booking->amount - $booking->total_received; @endphp
+                                            <button wire:click="openPaymentModal({{ $booking->id }})"
+                                                class="btn btn-sm btn-success text-white rounded-3 shadow-xs d-inline-flex align-items-center gap-1 action-btn-item"
+                                                style="font-size: 0.8125rem; font-weight: 600;"
+                                                title="Collect remaining balance: ₹{{ number_format($dueAmount, 2) }}">
+                                                <svg style="width: 0.85rem; height: 0.85rem;" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v12m-3-2.818l.879.659c1.171.879 3.07.879 4.242 0 1.172-.879 1.172-2.303 0-3.182C13.536 12.219 12.768 12 12 12c-.725 0-1.45-.22-2.003-.659-1.106-.879-1.106-2.303 0-3.182s2.9-.879 4.006 0l.415.33M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                                </svg>
+                                                <span>Collect ₹{{ number_format($dueAmount, 0) }}</span>
+                                            </button>
+                                        @endif
+
+                                        {{-- 2. Check In Button (Renamed from Status, shows Checked In state) --}}
+                                        @if($booking->came === 'Yes')
+                                            <button wire:click="openAttendanceModal({{ $booking->id }})"
+                                                class="btn btn-sm btn-outline-success rounded-3 d-inline-flex align-items-center gap-1 action-btn-item"
+                                                style="font-size: 0.8125rem; font-weight: 600;"
+                                                title="Update Check-in ({{ $booking->players ?? 0 }} players)">
+                                                <svg style="width: 0.85rem; height: 0.85rem;" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                                                </svg>
+                                                <span>Checked In</span>
+                                            </button>
+                                        @else
+                                            <button wire:click="openAttendanceModal({{ $booking->id }})"
+                                                class="btn btn-sm btn-outline-primary rounded-3 d-inline-flex align-items-center gap-1 action-btn-item"
+                                                style="font-size: 0.8125rem; font-weight: 600;"
+                                                title="Mark attendance / Check in customer">
+                                                <svg style="width: 0.85rem; height: 0.85rem;" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
+                                                </svg>
+                                                <span>Check In</span>
+                                            </button>
+                                        @endif
+
+                                        {{-- 3. Cancel Booking Button --}}
                                         <button wire:click="cancelBooking({{ $booking->id }})"
                                             wire:confirm="Are you sure you want to cancel this booking? Refund will be calculated based on system settings."
                                             wire:loading.attr="disabled"
                                             wire:target="cancelBooking({{ $booking->id }})"
-                                            class="btn btn-sm btn-outline-danger rounded-3">
-                                            Cancel
+                                            class="btn btn-sm btn-outline-danger rounded-3 d-inline-flex align-items-center gap-1 action-btn-item"
+                                            style="font-size: 0.8125rem; font-weight: 500;"
+                                            title="Cancel booking">
+                                            <svg style="width: 0.85rem; height: 0.85rem;" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+                                            </svg>
+                                            <span>Cancel</span>
                                         </button>
                                     @else
-                                        <span class="text-muted extra-small fst-italic py-1 px-2">No actions available</span>
+                                        <span class="badge rounded-pill bg-light text-muted border px-2.5 py-1.5" style="font-size: 0.75rem;">
+                                            No actions
+                                        </span>
                                     @endif
                                 </div>
                             </td>
@@ -656,38 +693,85 @@ new class extends Component {
     <div class="modal fade @if($showAttendanceModal) show d-block @endif" tabindex="-1"
         style="background: rgba(0,0,0,0.5);">
         <div class="modal-dialog modal-dialog-centered shadow-lg">
-            <div class="modal-content border-0 rounded-4">
-                <div class="modal-header border-bottom p-4">
-                    <h5 class="modal-title fw-bold">Update Attendance</h5>
+            <div class="modal-content border-0 rounded-4 overflow-hidden">
+                <div class="modal-header border-bottom p-4 bg-light">
+                    <div class="d-flex align-items-center gap-2">
+                        <div class="bg-primary bg-opacity-10 text-primary rounded-circle p-2 d-flex align-items-center justify-content-center" style="width: 2.25rem; height: 2.25rem;">
+                            <svg style="width: 1.1rem; height: 1.1rem;" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
+                            </svg>
+                        </div>
+                        <div>
+                            <h5 class="modal-title fw-bold mb-0" style="font-size: 1.1rem;">Customer Check-In</h5>
+                            <span class="text-muted extra-small">Verify arrival & head count</span>
+                        </div>
+                    </div>
                     <button type="button" class="btn-close" wire:click="closeModals"></button>
                 </div>
                 <div class="modal-body p-4">
+                    @if($activeBooking)
+                        <div class="card bg-light border-0 rounded-3 p-3 mb-4">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div>
+                                    <div class="fw-bold text-dark">{{ $activeBooking->user?->name ?? 'Guest User' }}</div>
+                                    <div class="text-muted extra-small">{{ $activeBooking->user?->mobile_number ?? $activeBooking->user?->mobile ?? 'No phone' }}</div>
+                                </div>
+                                <div class="text-end">
+                                    <span class="badge bg-white text-dark border">#BK-{{ $activeBooking->id }}</span>
+                                    <div class="text-muted extra-small mt-1">{{ $activeBooking->turf?->name ?? 'Turf' }}</div>
+                                </div>
+                            </div>
+                        </div>
+                    @endif
+
                     <div class="mb-4">
-                        <label class="form-label small fw-semibold text-muted">Did they show up?</label>
+                        <label class="form-label small fw-semibold text-muted d-block mb-2">Check-in Status</label>
                         <div class="d-flex gap-3">
                             <div class="flex-grow-1">
                                 <input type="radio" wire:model="came" value="Yes" class="btn-check" id="came_yes">
-                                <label class="btn btn-outline-success w-100 rounded-3 py-2 fw-bold"
-                                    for="came_yes">YES</label>
+                                <label class="btn btn-outline-success w-100 rounded-3 py-2 fw-semibold d-flex align-items-center justify-content-center gap-1.5"
+                                    for="came_yes">
+                                    <svg style="width: 1rem; height: 1rem;" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                                    </svg>
+                                    <span>Arrived (Checked In)</span>
+                                </label>
                             </div>
                             <div class="flex-grow-1">
                                 <input type="radio" wire:model="came" value="No" class="btn-check" id="came_no">
-                                <label class="btn btn-outline-danger w-100 rounded-3 py-2 fw-bold"
-                                    for="came_no">NO</label>
+                                <label class="btn btn-outline-danger w-100 rounded-3 py-2 fw-semibold d-flex align-items-center justify-content-center gap-1.5"
+                                    for="came_no">
+                                    <svg style="width: 1rem; height: 1rem;" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+                                    </svg>
+                                    <span>Not Arrived</span>
+                                </label>
                             </div>
                         </div>
                     </div>
 
                     <div class="mb-0">
-                        <label class="form-label small fw-semibold text-muted">Total Players</label>
-                        <input wire:model="players" type="number" class="form-control form-control-lg rounded-3"
-                            placeholder="Enter number of players...">
+                        <label class="form-label small fw-semibold text-muted">Total Players (Headcount)</label>
+                        <div class="input-group">
+                            <span class="input-group-text bg-white border-end-0 text-muted">
+                                <svg style="width: 1rem; height: 1rem;" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M18 18.72a9.094 9.094 0 003.741-.479 3 3 0 00-4.682-2.72m.94 3.198l.001.031c0 .225-.012.447-.037.666A11.944 11.944 0 0112 21c-2.17 0-4.207-.576-5.963-1.584A6.062 6.062 0 016 18.719m12 0a5.971 5.971 0 00-.941-3.197m0 0A5.995 5.995 0 0012 12.75a5.995 5.995 0 00-5.058 2.772m0 0a3 3 0 00-4.681 2.72 8.986 8.986 0 003.74.477m.94-3.197a5.971 5.971 0 00-.94 3.197M15 6.75a3 3 0 11-6 0 3 3 0 016 0zm6 3a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0zm-13.5 0a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0z" />
+                                </svg>
+                            </span>
+                            <input wire:model="players" type="number" min="1" max="50" class="form-control form-control-lg border-start-0 rounded-end-3"
+                                placeholder="e.g. 10">
+                        </div>
                         @error('players') <div class="text-danger extra-small mt-1">{{ $message }}</div> @enderror
                     </div>
                 </div>
                 <div class="modal-footer border-top p-4">
                     <button wire:click="saveAttendance"
-                        class="btn btn-primary w-100 rounded-3 py-2 fw-bold shadow-sm">Update Attendance</button>
+                        class="btn btn-primary w-100 rounded-3 py-2.5 fw-bold shadow-sm d-flex align-items-center justify-content-center gap-2">
+                        <svg style="width: 1rem; height: 1rem;" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                        </svg>
+                        <span>Confirm Check-In</span>
+                    </button>
                 </div>
             </div>
         </div>
@@ -713,6 +797,18 @@ new class extends Component {
 
         .cursor-not-allowed {
             cursor: allowed;
+        }
+
+        .action-btn-item {
+            transition: all 0.15s ease-in-out;
+        }
+
+        .action-btn-item:hover {
+            transform: translateY(-1px);
+        }
+
+        .gap-1\.5 {
+            gap: 0.375rem;
         }
     </style>
 </div>
