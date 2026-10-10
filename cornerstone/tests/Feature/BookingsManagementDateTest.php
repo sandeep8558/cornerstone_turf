@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\Booking;
+use App\Models\Slot;
 use App\Models\Turf;
 use App\Models\User;
 use Carbon\Carbon;
@@ -80,5 +81,53 @@ class BookingsManagementDateTest extends TestCase
             ->assertSet('selected_date', $otherDate)
             ->call('goToToday')
             ->assertSet('selected_date', $today);
+    }
+
+    public function test_format_booking_slots_combines_consecutive_slots(): void
+    {
+        $admin = User::factory()->create();
+        $admin->assignRole('Administrator');
+        $this->actingAs($admin);
+
+        $component = Volt::test('administrator.bookings-management');
+
+        // Create mock slot models / objects
+        $slots = collect([
+            (object)['from' => '18:00:00', 'to' => '19:00:00'],
+            (object)['from' => '19:00:00', 'to' => '20:00:00'],
+            (object)['from' => '20:00:00', 'to' => '21:00:00'],
+        ]);
+
+        $ranges = $component->instance()->formatBookingSlots($slots);
+
+        $this->assertCount(1, $ranges);
+        $this->assertEquals('06:00 PM', $ranges[0]['start']->format('h:i A'));
+        $this->assertEquals('09:00 PM', $ranges[0]['end']->format('h:i A'));
+        $this->assertEquals(3, $ranges[0]['count']);
+    }
+
+    public function test_format_booking_slots_keeps_non_consecutive_slots_separate(): void
+    {
+        $admin = User::factory()->create();
+        $admin->assignRole('Administrator');
+        $this->actingAs($admin);
+
+        $component = Volt::test('administrator.bookings-management');
+
+        $slots = collect([
+            (object)['from' => '07:00:00', 'to' => '08:00:00'],
+            (object)['from' => '18:00:00', 'to' => '19:00:00'],
+        ]);
+
+        $ranges = $component->instance()->formatBookingSlots($slots);
+
+        $this->assertCount(2, $ranges);
+        $this->assertEquals('07:00 AM', $ranges[0]['start']->format('h:i A'));
+        $this->assertEquals('08:00 AM', $ranges[0]['end']->format('h:i A'));
+        $this->assertEquals(1, $ranges[0]['count']);
+
+        $this->assertEquals('06:00 PM', $ranges[1]['start']->format('h:i A'));
+        $this->assertEquals('07:00 PM', $ranges[1]['end']->format('h:i A'));
+        $this->assertEquals(1, $ranges[1]['count']);
     }
 }

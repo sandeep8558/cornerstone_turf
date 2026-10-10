@@ -73,6 +73,48 @@ new class extends Component {
         $this->resetPage();
     }
 
+    public function formatBookingSlots($slots)
+    {
+        if (!$slots || $slots->isEmpty()) {
+            return [];
+        }
+
+        $sorted = $slots->sortBy('from')->values();
+        $ranges = [];
+        $currentRange = null;
+
+        foreach ($sorted as $slot) {
+            $from = Carbon::parse($slot->from);
+            $to = Carbon::parse($slot->to);
+
+            if ($currentRange === null) {
+                $currentRange = [
+                    'start' => $from,
+                    'end' => $to,
+                    'count' => 1,
+                ];
+            } else {
+                if ($currentRange['end']->format('H:i') === $from->format('H:i')) {
+                    $currentRange['end'] = $to;
+                    $currentRange['count']++;
+                } else {
+                    $ranges[] = $currentRange;
+                    $currentRange = [
+                        'start' => $from,
+                        'end' => $to,
+                        'count' => 1,
+                    ];
+                }
+            }
+        }
+
+        if ($currentRange !== null) {
+            $ranges[] = $currentRange;
+        }
+
+        return $ranges;
+    }
+
     // --- Payment Logic ---
     public function openPaymentModal($bookingId)
     {
@@ -400,24 +442,50 @@ new class extends Component {
                             </td>
                             <td>
                                 <div class="d-flex align-items-center gap-3">
-                                    <div class="bg-{{ $isCancelled ? 'secondary' : 'success' }}-subtle text-{{ $isCancelled ? 'secondary' : 'success' }} rounded-circle d-flex align-items-center justify-content-center fw-bold"
-                                        style="width: 2.5rem; height: 2.5rem;">
+                                    <div class="bg-{{ $isCancelled ? 'secondary' : 'success' }}-subtle text-{{ $isCancelled ? 'secondary' : 'success' }} rounded-circle d-flex align-items-center justify-content-center fw-bold shadow-xs"
+                                        style="width: 2.5rem; height: 2.5rem; flex-shrink: 0; font-size: 0.95rem;">
                                         {{ strtoupper(substr($booking->user->name, 0, 1)) }}
                                     </div>
                                     <div>
-                                        <div class="fw-bold {{ $isCancelled ? 'text-decoration-line-through text-muted' : '' }}">{{ $booking->user->name }}</div>
-                                        <div class="extra-small text-muted">{{ $booking->user->mobile_number }}</div>
-                                        <div class="extra-small text-primary fw-medium">{{ $booking->turf->name }}</div>
+                                        <div class="fw-bold {{ $isCancelled ? 'text-decoration-line-through text-muted' : 'text-dark' }}">
+                                            {{ $booking->user->name }}
+                                        </div>
+                                        <div class="mt-0.5">
+                                            <a href="tel:{{ $booking->user->mobile_number }}" 
+                                               class="text-decoration-none text-secondary d-inline-flex align-items-center gap-1 fw-medium" 
+                                               style="font-size: 0.775rem;"
+                                               title="Call customer">
+                                                <svg style="width: 0.8rem; height: 0.8rem; color: #16a34a;" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 6.75c0 8.284 6.716 15 15 15h2.25a2.25 2.25 0 002.25-2.25v-1.372c0-.516-.351-.966-.852-1.091l-4.423-1.106c-.44-.11-.902.055-1.173.417l-.97 1.293c-.282.376-.769.542-1.21.38a12.035 12.035 0 01-7.143-7.143c-.162-.441.004-.928.38-1.21l1.293-.97c.363-.271.527-.734.417-1.173L6.963 3.102a1.125 1.125 0 00-1.091-.852H4.5A2.25 2.25 0 002.25 4.5v2.25z" />
+                                                </svg>
+                                                <span>{{ $booking->user->mobile_number }}</span>
+                                            </a>
+                                        </div>
+                                        <div class="mt-0.5">
+                                            <span class="badge rounded-pill bg-success-subtle text-success border border-success-subtle px-2 py-0.5" style="font-size: 0.7rem; font-weight: 600;">
+                                                {{ $booking->turf->name }}
+                                            </span>
+                                        </div>
                                     </div>
                                 </div>
                             </td>
                             <td>
-                                @foreach($booking->slots as $slot)
-                                    <div class="badge bg-light text-dark fw-normal border mb-1" style="font-size: 0.65rem;">
-                                        {{ Carbon::parse($slot->from)->format('g:i A') }} -
-                                        {{ Carbon::parse($slot->to)->format('g:i A') }}
+                                @php $slotRanges = $this->formatBookingSlots($booking->slots); @endphp
+                                @forelse($slotRanges as $range)
+                                    <div class="d-flex align-items-center gap-1.5 mb-1 flex-wrap">
+                                        <span class="badge bg-white text-dark fw-bold border shadow-xs px-2.5 py-1.5 d-inline-flex align-items-center gap-1.5" style="font-size: 0.775rem;">
+                                            <svg style="width: 0.85rem; height: 0.85rem; color: #16a34a;" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                            </svg>
+                                            <span>{{ $range['start']->format('g:i A') }} – {{ $range['end']->format('g:i A') }}</span>
+                                        </span>
+                                        <span class="badge rounded-pill bg-light text-secondary border px-2 py-1" style="font-size: 0.7rem; font-weight: 600;">
+                                            {{ $range['count'] }} {{ $range['count'] === 1 ? 'hr' : 'hrs' }}
+                                        </span>
                                     </div>
-                                @endforeach
+                                @empty
+                                    <span class="text-muted extra-small">No slots</span>
+                                @endforelse
                             </td>
                             <td class="text-center">
                                 @if($isCancelled)
@@ -454,18 +522,15 @@ new class extends Component {
                             </td>
                             <td class="text-end">
                                 @if($isCancelled)
-                                    <div class="small fw-bold text-muted text-decoration-line-through">{{ number_format($booking->amount, 2) }} ₹</div>
+                                    <div class="small fw-bold text-muted text-decoration-line-through">₹{{ number_format($booking->amount, 2) }}</div>
                                     @if($booking->refund_amount > 0)
-                                        <div class="extra-small text-success fw-bold">Ref: {{ number_format($booking->refund_amount, 2) }} ₹</div>
+                                        <div class="extra-small text-success fw-bold">Ref: ₹{{ number_format($booking->refund_amount, 2) }}</div>
                                     @endif
                                 @else
-                                    <div class="small fw-bold">{{ number_format($booking->amount, 2) }} ₹</div>
-                                    <div class="extra-small text-muted">Rec: {{ number_format($booking->total_received, 2) }} ₹
-                                    </div>
+                                    <div class="small fw-bold text-dark">₹{{ number_format($booking->amount, 2) }}</div>
+                                    <div class="extra-small text-muted">Rec: ₹{{ number_format($booking->total_received, 2) }}</div>
                                     @if(!$booking->is_fully_paid)
-                                        <div class="extra-small text-danger fw-medium">Due:
-                                            {{ number_format($booking->amount - $booking->total_received, 2) }} ₹
-                                        </div>
+                                        <div class="extra-small text-danger fw-semibold">Due: ₹{{ number_format($booking->amount - $booking->total_received, 2) }}</div>
                                     @endif
                                 @endif
                             </td>
@@ -525,7 +590,7 @@ new class extends Component {
                             <div class="text-end">
                                 <div class="extra-small text-muted text-uppercase fw-bold">Due Amount</div>
                                 <div class="h5 mb-0 fw-bold text-danger">
-                                    {{ number_format($activeBooking->amount - $activeBooking->total_received, 2) }} ₹
+                                    ₹{{ number_format($activeBooking->amount - $activeBooking->total_received, 2) }}
                                 </div>
                             </div>
                         </div>
