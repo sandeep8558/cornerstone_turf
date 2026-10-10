@@ -86,23 +86,34 @@ new class extends Component {
         foreach ($sorted as $slot) {
             $from = Carbon::parse($slot->from);
             $to = Carbon::parse($slot->to);
+            $isMidnightEnd = ($slot->to === '23:59:59' || $to->format('H:i') === '23:59');
+            $slotMinutes = (int) ($slot->minutes ?? 30);
+            if ($slotMinutes <= 0) {
+                $slotMinutes = 30;
+            }
 
             if ($currentRange === null) {
                 $currentRange = [
                     'start' => $from,
                     'end' => $to,
-                    'count' => 1,
+                    'is_midnight_end' => $isMidnightEnd,
+                    'total_minutes' => $slotMinutes,
+                    'slot_count' => 1,
                 ];
             } else {
                 if ($currentRange['end']->format('H:i') === $from->format('H:i')) {
                     $currentRange['end'] = $to;
-                    $currentRange['count']++;
+                    $currentRange['is_midnight_end'] = $isMidnightEnd;
+                    $currentRange['total_minutes'] += $slotMinutes;
+                    $currentRange['slot_count']++;
                 } else {
                     $ranges[] = $currentRange;
                     $currentRange = [
                         'start' => $from,
                         'end' => $to,
-                        'count' => 1,
+                        'is_midnight_end' => $isMidnightEnd,
+                        'total_minutes' => $slotMinutes,
+                        'slot_count' => 1,
                     ];
                 }
             }
@@ -110,6 +121,21 @@ new class extends Component {
 
         if ($currentRange !== null) {
             $ranges[] = $currentRange;
+        }
+
+        foreach ($ranges as &$range) {
+            $hours = intdiv($range['total_minutes'], 60);
+            $mins = $range['total_minutes'] % 60;
+
+            if ($hours > 0 && $mins > 0) {
+                $range['duration'] = "{$hours} hr {$mins} mins";
+            } elseif ($hours > 0) {
+                $range['duration'] = $hours === 1 ? '1 hr' : "{$hours} hrs";
+            } else {
+                $range['duration'] = "{$mins} mins";
+            }
+
+            $range['end_label'] = $range['is_midnight_end'] ? '12:00 AM' : $range['end']->format('g:i A');
         }
 
         return $ranges;
@@ -477,10 +503,10 @@ new class extends Component {
                                             <svg style="width: 0.85rem; height: 0.85rem; color: #16a34a;" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                                                 <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
                                             </svg>
-                                            <span>{{ $range['start']->format('g:i A') }} – {{ $range['end']->format('g:i A') }}</span>
+                                            <span>{{ $range['start']->format('g:i A') }} – {{ $range['end_label'] }}</span>
                                         </span>
                                         <span class="badge rounded-pill bg-light text-secondary border px-2 py-1" style="font-size: 0.7rem; font-weight: 600;">
-                                            {{ $range['count'] }} {{ $range['count'] === 1 ? 'hr' : 'hrs' }}
+                                            {{ $range['duration'] }}
                                         </span>
                                     </div>
                                 @empty

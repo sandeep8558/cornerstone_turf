@@ -91,19 +91,43 @@ class BookingsManagementDateTest extends TestCase
 
         $component = Volt::test('administrator.bookings-management');
 
-        // Create mock slot models / objects
+        // Two 30-minute slots: 14:00 - 14:30 and 14:30 - 15:00
         $slots = collect([
-            (object)['from' => '18:00:00', 'to' => '19:00:00'],
-            (object)['from' => '19:00:00', 'to' => '20:00:00'],
-            (object)['from' => '20:00:00', 'to' => '21:00:00'],
+            (object)['from' => '14:00:00', 'to' => '14:30:00', 'minutes' => 30],
+            (object)['from' => '14:30:00', 'to' => '15:00:00', 'minutes' => 30],
         ]);
 
         $ranges = $component->instance()->formatBookingSlots($slots);
 
         $this->assertCount(1, $ranges);
-        $this->assertEquals('06:00 PM', $ranges[0]['start']->format('h:i A'));
-        $this->assertEquals('09:00 PM', $ranges[0]['end']->format('h:i A'));
-        $this->assertEquals(3, $ranges[0]['count']);
+        $this->assertEquals('02:00 PM', $ranges[0]['start']->format('h:i A'));
+        $this->assertEquals('3:00 PM', $ranges[0]['end_label']);
+        $this->assertEquals('1 hr', $ranges[0]['duration']);
+        $this->assertEquals(2, $ranges[0]['slot_count']);
+    }
+
+    public function test_format_booking_slots_handles_midnight_end(): void
+    {
+        $admin = User::factory()->create();
+        $admin->assignRole('Administrator');
+        $this->actingAs($admin);
+
+        $component = Volt::test('administrator.bookings-management');
+
+        // Four 30-minute slots ending at midnight
+        $slots = collect([
+            (object)['from' => '22:00:00', 'to' => '22:30:00', 'minutes' => 30],
+            (object)['from' => '22:30:00', 'to' => '23:00:00', 'minutes' => 30],
+            (object)['from' => '23:00:00', 'to' => '23:30:00', 'minutes' => 30],
+            (object)['from' => '23:30:00', 'to' => '23:59:59', 'minutes' => 30],
+        ]);
+
+        $ranges = $component->instance()->formatBookingSlots($slots);
+
+        $this->assertCount(1, $ranges);
+        $this->assertEquals('10:00 PM', $ranges[0]['start']->format('h:i A'));
+        $this->assertEquals('12:00 AM', $ranges[0]['end_label']);
+        $this->assertEquals('2 hrs', $ranges[0]['duration']);
     }
 
     public function test_format_booking_slots_keeps_non_consecutive_slots_separate(): void
@@ -115,19 +139,19 @@ class BookingsManagementDateTest extends TestCase
         $component = Volt::test('administrator.bookings-management');
 
         $slots = collect([
-            (object)['from' => '07:00:00', 'to' => '08:00:00'],
-            (object)['from' => '18:00:00', 'to' => '19:00:00'],
+            (object)['from' => '07:00:00', 'to' => '07:30:00', 'minutes' => 30],
+            (object)['from' => '18:00:00', 'to' => '19:00:00', 'minutes' => 60],
         ]);
 
         $ranges = $component->instance()->formatBookingSlots($slots);
 
         $this->assertCount(2, $ranges);
         $this->assertEquals('07:00 AM', $ranges[0]['start']->format('h:i A'));
-        $this->assertEquals('08:00 AM', $ranges[0]['end']->format('h:i A'));
-        $this->assertEquals(1, $ranges[0]['count']);
+        $this->assertEquals('7:30 AM', $ranges[0]['end_label']);
+        $this->assertEquals('30 mins', $ranges[0]['duration']);
 
         $this->assertEquals('06:00 PM', $ranges[1]['start']->format('h:i A'));
-        $this->assertEquals('07:00 PM', $ranges[1]['end']->format('h:i A'));
-        $this->assertEquals(1, $ranges[1]['count']);
+        $this->assertEquals('7:00 PM', $ranges[1]['end_label']);
+        $this->assertEquals('1 hr', $ranges[1]['duration']);
     }
 }
