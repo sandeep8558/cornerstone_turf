@@ -201,19 +201,6 @@ new class extends Component {
         $this->activeBooking = null;
     }
 
-    public function clearAllBookings()
-    {
-        try {
-            DB::transaction(function () {
-                Booking::query()->delete();
-            });
-
-            session()->flash('message', 'All orders have been successfully cleared.');
-        } catch (\Exception $e) {
-            session()->flash('error', 'Failed to clear orders: ' . $e->getMessage());
-        }
-    }
-
     public function with()
     {
         $query = Booking::with(['user', 'turf', 'location', 'bookingPayments', 'slots'])
@@ -299,9 +286,9 @@ new class extends Component {
     <!-- Bookings List -->
     <div class="card border-0 shadow-sm rounded-4 overflow-hidden">
         <div class="card-header bg-white border-bottom p-4">
-            <div class="row align-items-center">
-                <div class="col-md-4">
-                    <h3 class="h6 fw-bold mb-0">
+            <div class="row align-items-center justify-content-between g-3">
+                <div class="col-md-6">
+                    <h3 class="h6 fw-bold mb-0 text-dark">
                         @if($search)
                             Search Results for "{{ $search }}"
                         @else
@@ -309,7 +296,7 @@ new class extends Component {
                         @endif
                     </h3>
                 </div>
-                <div class="col-md-5 mt-3 mt-md-0">
+                <div class="col-md-5 col-lg-4">
                     <div class="input-group">
                         <span class="input-group-text bg-light border-0 ps-3">
                             <svg style="width: 1rem; height: 1rem;" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
@@ -327,16 +314,6 @@ new class extends Component {
                             </button>
                         @endif
                     </div>
-                </div>
-                <div class="col-md-3 mt-3 mt-md-0 text-end">
-                    <button wire:click="clearAllBookings"
-                        wire:confirm="⚠️ WARNING: This will permanently delete ALL bookings and orders from the database! This action cannot be undone. Are you sure you want to proceed?"
-                        class="btn btn-danger btn-sm rounded-3 py-2 px-3 fw-semibold shadow-sm d-flex align-items-center gap-2 float-end">
-                        <svg style="width: 1rem; height: 1rem;" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                        </svg>
-                        Clear All Orders
-                    </button>
                 </div>
             </div>
         </div>
