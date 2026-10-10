@@ -2,19 +2,19 @@
 
 use App\Models\BookingPayment;
 use Livewire\Volt\Component;
-use Livewire\WithPagination;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 
 new class extends Component {
-    use WithPagination;
-
-    protected $paginationTheme = 'bootstrap';
-
     public $search = '';
+    public $perPage = 15;
 
     public function updatingSearch() {
-        $this->resetPage();
+        $this->perPage = 15;
+    }
+
+    public function loadMore() {
+        $this->perPage += 15;
     }
 
     public function deletePayment($paymentId) {
@@ -63,7 +63,7 @@ new class extends Component {
         }
 
         return [
-            'payments' => $query->paginate(10),
+            'payments' => $query->paginate($this->perPage),
         ];
     }
 }; ?>
@@ -85,7 +85,12 @@ new class extends Component {
     <div class="card border-0 shadow-sm rounded-4 p-4 mb-4 bg-white">
         <div class="row align-items-center g-3">
             <div class="col-md-6">
-                <h3 class="h4 fw-bold mb-1">Payment Ledger</h3>
+                <div class="d-flex align-items-center gap-2 mb-1">
+                    <h3 class="h4 fw-bold mb-0">Payment Ledger</h3>
+                    <span class="badge bg-light text-muted border px-2.5 py-1 rounded-pill extra-small fw-semibold">
+                        {{ $payments->total() }} Total
+                    </span>
+                </div>
                 <p class="text-muted small mb-0">Track all transaction history, customer payments, and manage records.</p>
             </div>
             <div class="col-md-6">
@@ -167,10 +172,21 @@ new class extends Component {
                 </tbody>
             </table>
         </div>
-        @if($payments->hasPages())
-            <div class="card-footer bg-white border-top-0 p-4">
-                {{ $payments->links() }}
+        @if($payments->hasMorePages())
+            <div wire:intersect.margin.200px="loadMore" class="card-footer bg-white border-top-0 py-4 text-center">
+                <div class="d-inline-flex align-items-center gap-2 text-muted small py-2 px-3 bg-light rounded-pill border shadow-xs">
+                    <div class="spinner-border spinner-border-sm text-success" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                    <span>Loading more payments (showing {{ $payments->count() }} of {{ $payments->total() }})...</span>
+                </div>
             </div>
+        @else
+            @if($payments->total() > 0)
+                <div class="card-footer bg-white border-top-0 py-3 text-center text-muted extra-small">
+                    <span>Showing all {{ $payments->total() }} payments</span>
+                </div>
+            @endif
         @endif
     </div>
 

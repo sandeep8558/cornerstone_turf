@@ -136,4 +136,44 @@ class PaymentsManagementTest extends TestCase
         $this->assertEquals(0, $booking->fresh()->total_received);
         $this->assertEquals('PayAtLocation', $booking->fresh()->payment_type);
     }
+
+    public function test_infinite_scroll_load_more_increments_per_page_and_loads_more_records(): void
+    {
+        $admin = User::factory()->create();
+        $admin->assignRole('Administrator');
+        $this->actingAs($admin);
+
+        $customer = User::factory()->create(['name' => 'Karan']);
+        $location = Location::create(['name' => 'Turf Hub', 'is_active' => true]);
+        $turf = Turf::create(['location_id' => $location->id, 'name' => 'Turf 3', 'turf_type' => 'Synthetic', 'is_active' => 'Yes']);
+
+        $booking = Booking::create([
+            'user_id' => $customer->id,
+            'location_id' => $location->id,
+            'turf_id' => $turf->id,
+            'date' => Carbon::today()->toDateString(),
+            'amount' => 5000,
+            'payment_type' => 'Full',
+            'status' => 'Success',
+        ]);
+
+        // Create 20 payment records
+        for ($i = 1; $i <= 20; $i++) {
+            BookingPayment::create([
+                'booking_id' => $booking->id,
+                'amount' => 100,
+                'type' => 'Cash',
+            ]);
+        }
+
+        // Component starts with perPage = 15
+        $component = Volt::test('administrator.payments-management')
+            ->assertSet('perPage', 15)
+            ->assertSee('Loading more payments')
+            ->assertSee('showing 15 of 20')
+            ->call('loadMore')
+            ->assertSet('perPage', 30)
+            ->assertSee('Showing all 20 payments');
+    }
 }
+
