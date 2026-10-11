@@ -7,6 +7,22 @@ class BookingHelper {
   static const String supportAddress =
       'Near Sarvodaya Vidyalaya, Sarvodaya Nagar, Datta Nagar, Ambernath West 421505';
 
+  static String _formatTimeStr(String? timeStr, {bool isEnd = false}) {
+    if (timeStr == null || timeStr.isEmpty) return '';
+    try {
+      if (isEnd && (timeStr.startsWith('23:59') || timeStr.startsWith('24:00'))) {
+        return '12:00 AM';
+      }
+      final parsed = DateFormat('HH:mm:ss').parse(timeStr);
+      if (isEnd && parsed.hour == 23 && parsed.minute >= 59) {
+        return '12:00 AM';
+      }
+      return DateFormat('hh:mm a').format(parsed);
+    } catch (e) {
+      return timeStr;
+    }
+  }
+
   /// Generates a complete, formatted booking summary message for WhatsApp and sharing.
   /// If a custom template is configured in Admin Settings, it interpolates dynamic tags.
   static String generateBookingMessage(
@@ -103,17 +119,53 @@ class BookingHelper {
       String name = booking['user']?['name']?.toString() ?? 'N/A';
       String dateStr = DateFormat('EEEE, dd MMM yyyy').format(bookingDate);
 
-      String slotTimings = '';
+      String slotsStr = '';
+      String timeStr = '';
       if (booking['slots'] != null && booking['slots'] is List) {
-        final slots = booking['slots'] as List;
-        slotTimings = slots.map((s) {
-          try {
-            final fromTime = DateFormat('HH:mm:ss').parse(s['from'].toString());
-            final toTime = DateFormat('HH:mm:ss').parse(s['to'].toString());
-            return '${DateFormat('hh:mm a').format(fromTime)} to ${DateFormat('hh:mm a').format(toTime)}';
-          } catch (e) {
-            return '${s['from']} to ${s['to']}';
+        final rawSlots = List<dynamic>.from(booking['slots']);
+        // Sort slots by from time
+        rawSlots.sort((a, b) =>
+            (a['from']?.toString() ?? '').compareTo(b['from']?.toString() ?? ''));
+
+        // 1. slotsStr (all individual 30-min slots)
+        slotsStr = rawSlots.map((s) {
+          final from = _formatTimeStr(s['from']?.toString());
+          final to = _formatTimeStr(s['to']?.toString(), isEnd: true);
+          return '$from to $to';
+        }).join(', ');
+
+        // 2. timeStr (start time and end time of all consecutive slots)
+        List<Map<String, String>> ranges = [];
+        Map<String, String>? currentRange;
+
+        for (var slot in rawSlots) {
+          String from = slot['from']?.toString() ?? '';
+          String to = slot['to']?.toString() ?? '';
+          if (from.isEmpty || to.isEmpty) continue;
+
+          if (currentRange == null) {
+            currentRange = {'from': from, 'to': to};
+          } else {
+            String prevTo = currentRange['to'] ?? '';
+            String prevToHhMm = prevTo.length >= 5 ? prevTo.substring(0, 5) : prevTo;
+            String curFromHhMm = from.length >= 5 ? from.substring(0, 5) : from;
+
+            if (prevToHhMm == curFromHhMm || (prevTo.startsWith('23:59') && from.startsWith('00:00'))) {
+              currentRange['to'] = to;
+            } else {
+              ranges.add(currentRange);
+              currentRange = {'from': from, 'to': to};
+            }
           }
+        }
+        if (currentRange != null) {
+          ranges.add(currentRange);
+        }
+
+        timeStr = ranges.map((r) {
+          final from = _formatTimeStr(r['from']);
+          final to = _formatTimeStr(r['to'], isEnd: true);
+          return '$from to $to';
         }).join(', ');
       }
 
@@ -121,7 +173,8 @@ class BookingHelper {
       if (totalMinutes > 0) {
         double hrs = totalMinutes / 60.0;
         if (hrs % 1 == 0) {
-          durationStr = '${hrs.toInt()} hrs';
+          int h = hrs.toInt();
+          durationStr = '$h ${h == 1 ? 'hr' : 'hrs'}';
         } else {
           durationStr = '${hrs.toStringAsFixed(1)} hrs';
         }
@@ -135,7 +188,8 @@ class BookingHelper {
         return configuredTemplate
             .replaceAll('{name}', name)
             .replaceAll('{date}', dateStr)
-            .replaceAll('{time}', slotTimings)
+            .replaceAll('{time}', timeStr)
+            .replaceAll('{slots}', slotsStr)
             .replaceAll('{duration}', durationStr)
             .replaceAll('{box}', boxName)
             .replaceAll('{sub_total}', subTotal.toStringAsFixed(0))
@@ -152,7 +206,7 @@ class BookingHelper {
       buffer.writeln('━━━━━━━━━━━━━━━');
       buffer.writeln('👤 Name : $name');
       buffer.writeln('📅 Date : $dateStr');
-      buffer.writeln('⏰ Time : $slotTimings');
+      buffer.writeln('⏰ Time : $timeStr');
       buffer.writeln('⏱️ Duration : $durationStr');
       buffer.writeln('🟩 Box : $boxName');
       buffer.writeln();

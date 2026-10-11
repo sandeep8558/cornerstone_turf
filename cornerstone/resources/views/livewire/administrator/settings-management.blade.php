@@ -217,11 +217,12 @@ new class extends Component {
                         </div>
 
                         <div class="p-3 bg-light rounded-3 mb-3 border">
-                            <div class="small fw-semibold text-secondary mb-2">Click any tag below to see what will be inserted:</div>
+                            <div class="small fw-semibold text-secondary mb-2">Available dynamic tags (click or copy into template):</div>
                             <div class="d-flex flex-wrap gap-2">
                                 <span class="badge bg-white text-dark border px-2 py-1 font-monospace">{name}</span>
                                 <span class="badge bg-white text-dark border px-2 py-1 font-monospace">{date}</span>
-                                <span class="badge bg-white text-dark border px-2 py-1 font-monospace">{time}</span>
+                                <span class="badge bg-primary-subtle text-primary border border-primary px-2 py-1 font-monospace fw-bold">{time}</span>
+                                <span class="badge bg-success-subtle text-success border border-success px-2 py-1 font-monospace fw-bold">{slots}</span>
                                 <span class="badge bg-white text-dark border px-2 py-1 font-monospace">{duration}</span>
                                 <span class="badge bg-white text-dark border px-2 py-1 font-monospace">{box}</span>
                                 <span class="badge bg-white text-dark border px-2 py-1 font-monospace">{sub_total}</span>
@@ -231,6 +232,11 @@ new class extends Component {
                                 <span class="badge bg-white text-dark border px-2 py-1 font-monospace">{paid_amount}</span>
                                 <span class="badge bg-white text-dark border px-2 py-1 font-monospace">{due_amount}</span>
                                 <span class="badge bg-white text-dark border px-2 py-1 font-monospace">{support_contact}</span>
+                            </div>
+                            <div class="extra-small text-muted mt-2 pt-2 border-top">
+                                <strong>Timing Options:</strong><br>
+                                • <code class="text-primary fw-bold">{time}</code> — Overall start & end time of all consecutive slots (e.g. <em>11:00 PM to 12:00 AM</em>)<br>
+                                • <code class="text-success fw-bold">{slots}</code> — Individual 30-min slot timings (e.g. <em>11:00 PM to 11:30 PM, 11:30 PM to 12:00 AM</em>)
                             </div>
                         </div>
 
