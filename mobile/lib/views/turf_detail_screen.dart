@@ -871,10 +871,8 @@ class _TurfDetailScreenState extends State<TurfDetailScreen> {
     final authController = Get.find<AuthController>();
     final isManager = authController.isManager.value == true;
     if (isManager) {
-      double finalAmount = _isLongBooking
-          ? _totalAmount
-          : _totalAmount - _bookingController.discountAmount.value;
-      _amountPaidController.text = finalAmount.toStringAsFixed(0);
+      _showManagerBookingBottomSheet();
+      return;
     }
 
     bool isPartPaymentActive =
@@ -882,7 +880,7 @@ class _TurfDetailScreenState extends State<TurfDetailScreen> {
     bool isPayAtLocationActive =
         _bookingController.systemSettings['is_pay_at_location_active'] == true;
 
-    if (isPartPaymentActive || isPayAtLocationActive || isManager) {
+    if (isPartPaymentActive || isPayAtLocationActive) {
       _showPaymentTypeDialog();
     } else {
       _selectedPaymentType = 'Full';
@@ -910,13 +908,6 @@ class _TurfDetailScreenState extends State<TurfDetailScreen> {
         ? _longBookingValidSlots
         : _selectedSlotIds.length;
     double partPaymentTotal = minPartAmount * totalValidSlots;
-    final authController = Get.find<AuthController>();
-    final isManager = authController.isManager.value == true;
-
-    if (isManager) {
-      _additionalDiscountController.text = '';
-      _amountPaidController.text = finalAmount.toStringAsFixed(0);
-    }
 
     Get.bottomSheet(
       Padding(
@@ -926,191 +917,807 @@ class _TurfDetailScreenState extends State<TurfDetailScreen> {
           borderRadius: const BorderRadius.vertical(top: Radius.circular(25)),
           child: Padding(
             padding: const EdgeInsets.all(20),
-            child: StatefulBuilder(
-            builder: (BuildContext context, StateSetter dialogSetState) {
-              double additionalDiscount = double.tryParse(_additionalDiscountController.text) ?? 0.0;
-              double calculatedFinalAmount = (finalAmount - additionalDiscount).clamp(0.0, finalAmount);
-
-              return SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Center(
-                      child: Text(
-                        'Choose Payment Method',
-                        style: TextStyle(
-                          color: AppColors.textMain,
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                        ),
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Center(
+                    child: Text(
+                      'Choose Payment Method',
+                      style: TextStyle(
+                        color: AppColors.textMain,
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
                       ),
                     ),
-                    const SizedBox(height: 25),
-                    if (isManager) ...[
+                  ),
+                  const SizedBox(height: 25),
+                  _buildPaymentOption(
+                    icon: Icons.payments_outlined,
+                    title: 'Pay Full Amount',
+                    subtitle: 'Pay ₹${finalAmount.toStringAsFixed(0)} online securely',
+                    onTap: () {
+                      _selectedPaymentType = 'Full';
+                      Get.back();
+                      _showPaymentConfirmationBottomSheet(
+                        payableAmount: finalAmount,
+                        paymentType: 'Full',
+                      );
+                    },
+                  ),
+                  if (_bookingController.systemSettings['is_part_payment_active'] ==
+                      true) ...[
+                    const SizedBox(height: 12),
+                    _buildPaymentOption(
+                      icon: Icons.account_balance_wallet_outlined,
+                      title: 'Part Payment',
+                      subtitle: 'Pay ₹${partPaymentTotal.toStringAsFixed(0)} now and rest later',
+                      onTap: () {
+                        _selectedPaymentType = 'Part';
+                        Get.back();
+                        _showPaymentConfirmationBottomSheet(
+                          payableAmount: partPaymentTotal,
+                          paymentType: 'Part',
+                        );
+                      },
+                    ),
+                  ],
+                  if (_bookingController.systemSettings['is_pay_at_location_active'] ==
+                      true) ...[
+                    const SizedBox(height: 12),
+                    _buildPaymentOption(
+                      icon: Icons.location_on_outlined,
+                      title: 'Pay at Location',
+                      subtitle: 'Book now and pay ₹${finalAmount.toStringAsFixed(0)} at venue',
+                      onTap: () {
+                        _selectedPaymentType = 'PayAtLocation';
+                        Get.back();
+                        _finalizePayAtLocation();
+                      },
+                    ),
+                  ],
+                  const SizedBox(height: 10),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+      isScrollControlled: true,
+    );
+  }
+
+  void _showManagerBookingBottomSheet() {
+    double baseTotalAmount = _isLongBooking
+        ? _totalAmount
+        : _totalAmount - _bookingController.discountAmount.value;
+    double minPartAmount =
+        double.tryParse(
+          _bookingController.systemSettings['min_part_payment']?.toString() ??
+              '0',
+        ) ??
+        0;
+
+    int totalValidSlots = _isLongBooking
+        ? _longBookingValidSlots
+        : _selectedSlotIds.length;
+    double defaultPartAmount = minPartAmount > 0
+        ? (minPartAmount * totalValidSlots)
+        : (baseTotalAmount / 2).roundToDouble();
+
+    _additionalDiscountController.text = '';
+    _amountPaidController.text = baseTotalAmount.toStringAsFixed(0);
+    String selectedCollectionOption = 'Full'; // 'Full', 'Part', 'Other'
+    String selectedPaymentMode = 'Cash'; // 'Cash', 'UPI', 'Other'
+
+    Get.bottomSheet(
+      Padding(
+        padding: EdgeInsets.only(
+          bottom: MediaQuery.of(Get.context!).viewInsets.bottom,
+        ),
+        child: Material(
+          color: Colors.white,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+          child: SafeArea(
+            child: StatefulBuilder(
+              builder: (BuildContext context, StateSetter sheetSetState) {
+                double additionalDiscount =
+                    double.tryParse(_additionalDiscountController.text) ?? 0.0;
+                double netTotal = (baseTotalAmount - additionalDiscount).clamp(
+                  0.0,
+                  baseTotalAmount,
+                );
+                double collectedAmount =
+                    double.tryParse(_amountPaidController.text) ?? 0.0;
+                double remainingDue = (netTotal - collectedAmount).clamp(
+                  0.0,
+                  netTotal,
+                );
+
+                final client = _bookingController.selectedClient.value;
+                String turfName =
+                    _currentTurf?['name']?.toString() ?? 'Cornerstone Turf';
+                String timeRange = _getSelectedSlotsTimeRange();
+                String duration = _getSelectedSlotsDuration();
+                String dateStr = _isLongBooking
+                    ? (_isScatteredBooking
+                        ? '${_scatteredDates.length} Selected Dates'
+                        : '${DateFormat('dd MMM').format(_longBookingFromDate)} - ${DateFormat('dd MMM yyyy').format(_longBookingToDate)}')
+                    : DateFormat('EEEE, dd MMM yyyy').format(_selectedDate);
+
+                return SingleChildScrollView(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 20,
+                    vertical: 16,
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Center(
+                        child: Container(
+                          width: 40,
+                          height: 4,
+                          decoration: BoxDecoration(
+                            color: Colors.grey.shade300,
+                            borderRadius: BorderRadius.circular(2),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: const [
+                              Text(
+                                'Manager Slot Booking',
+                                style: TextStyle(
+                                  color: AppColors.textMain,
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              SizedBox(height: 2),
+                              Text(
+                                'Offline collection & direct booking',
+                                style: TextStyle(
+                                  color: AppColors.textSecondary,
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ],
+                          ),
+                          IconButton(
+                            icon: const Icon(
+                              Icons.close,
+                              size: 20,
+                              color: AppColors.textSecondary,
+                            ),
+                            onPressed: () => Get.back(),
+                            padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints(),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 14),
+
+                      // Client Badge
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 9,
+                        ),
+                        decoration: BoxDecoration(
+                          color: AppColors.green50,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: AppColors.green200),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(
+                              client != null
+                                  ? Icons.person
+                                  : Icons.admin_panel_settings,
+                              size: 18,
+                              color: AppColors.primary,
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                client != null
+                                    ? 'Client: ${client['name']} (${client['mobile_number'] ?? ''})'
+                                    : 'Client: Self / Direct Booking',
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 13,
+                                  color: AppColors.textMain,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+
+                      // Additional Discount (₹)
                       const Text(
                         'Additional Discount (₹)',
                         style: TextStyle(
                           color: AppColors.textMain,
-                          fontSize: 14,
+                          fontSize: 13,
                           fontWeight: FontWeight.bold,
                         ),
                       ),
-                      const SizedBox(height: 10),
+                      const SizedBox(height: 6),
                       TextFormField(
                         controller: _additionalDiscountController,
                         keyboardType: TextInputType.number,
-                        style: const TextStyle(color: AppColors.textMain),
+                        style: const TextStyle(
+                          color: AppColors.textMain,
+                          fontWeight: FontWeight.w600,
+                        ),
                         onChanged: (val) {
                           double disc = double.tryParse(val) ?? 0.0;
-                          double newFinal = (finalAmount - disc).clamp(0.0, finalAmount);
-                          _amountPaidController.text = newFinal.toStringAsFixed(0);
-                          dialogSetState(() {});
+                          double newNet = (baseTotalAmount - disc).clamp(
+                            0.0,
+                            baseTotalAmount,
+                          );
+                          if (selectedCollectionOption == 'Full') {
+                            _amountPaidController.text = newNet.toStringAsFixed(0);
+                          } else if (selectedCollectionOption == 'Part') {
+                            _amountPaidController.text = defaultPartAmount
+                                .clamp(0.0, newNet)
+                                .toStringAsFixed(0);
+                          }
+                          sheetSetState(() {});
                         },
                         decoration: InputDecoration(
-                          labelText: 'Additional Discount',
-                          labelStyle: const TextStyle(color: AppColors.primary),
-                          hintText: 'Enter discount amount',
-                          prefixIcon: const Icon(Icons.currency_rupee, color: AppColors.primary),
+                          hintText: 'Enter discount amount (optional)',
+                          prefixIcon: const Icon(
+                            Icons.currency_rupee,
+                            color: AppColors.primary,
+                            size: 18,
+                          ),
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 14,
+                            vertical: 10,
+                          ),
                           enabledBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(15),
-                            borderSide: const BorderSide(color: AppColors.green200),
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: const BorderSide(
+                              color: AppColors.green200,
+                            ),
                           ),
                           focusedBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(15),
-                            borderSide: const BorderSide(color: AppColors.primary, width: 2),
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: const BorderSide(
+                              color: AppColors.primary,
+                              width: 2,
+                            ),
                           ),
                           filled: true,
-                          fillColor: AppColors.green50,
+                          fillColor: AppColors.green50.withValues(alpha: 0.5),
                         ),
                       ),
-                      const SizedBox(height: 15),
+                      const SizedBox(height: 14),
+
+                      // Amount to Collect (Full / Part / Other)
                       const Text(
-                        'Manager / Admin Cash Collected (₹)',
+                        'Amount to Collect',
                         style: TextStyle(
                           color: AppColors.textMain,
-                          fontSize: 14,
+                          fontSize: 13,
                           fontWeight: FontWeight.bold,
                         ),
                       ),
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          _buildChoiceChip(
+                            label: 'Full (₹${netTotal.toStringAsFixed(0)})',
+                            isSelected: selectedCollectionOption == 'Full',
+                            onTap: () {
+                              selectedCollectionOption = 'Full';
+                              _amountPaidController.text =
+                                  netTotal.toStringAsFixed(0);
+                              sheetSetState(() {});
+                            },
+                          ),
+                          const SizedBox(width: 8),
+                          _buildChoiceChip(
+                            label:
+                                'Part (₹${defaultPartAmount.clamp(0.0, netTotal).toStringAsFixed(0)})',
+                            isSelected: selectedCollectionOption == 'Part',
+                            onTap: () {
+                              selectedCollectionOption = 'Part';
+                              _amountPaidController.text = defaultPartAmount
+                                  .clamp(0.0, netTotal)
+                                  .toStringAsFixed(0);
+                              sheetSetState(() {});
+                            },
+                          ),
+                          const SizedBox(width: 8),
+                          _buildChoiceChip(
+                            label: 'Other',
+                            isSelected: selectedCollectionOption == 'Other',
+                            onTap: () {
+                              selectedCollectionOption = 'Other';
+                              sheetSetState(() {});
+                            },
+                          ),
+                        ],
+                      ),
                       const SizedBox(height: 10),
+
+                      // Amount Collected (₹) input
                       TextFormField(
                         controller: _amountPaidController,
                         keyboardType: TextInputType.number,
-                        style: const TextStyle(color: AppColors.textMain),
+                        style: const TextStyle(
+                          color: AppColors.textMain,
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
                         onChanged: (val) {
-                          dialogSetState(() {});
+                          double amt = double.tryParse(val) ?? 0.0;
+                          if ((amt - netTotal).abs() < 0.01) {
+                            selectedCollectionOption = 'Full';
+                          } else if (defaultPartAmount > 0 &&
+                              (amt - defaultPartAmount).abs() < 0.01) {
+                            selectedCollectionOption = 'Part';
+                          } else {
+                            selectedCollectionOption = 'Other';
+                          }
+                          sheetSetState(() {});
                         },
                         decoration: InputDecoration(
-                          labelText: 'Amount Paid',
+                          labelText: 'Amount Collected Now (₹)',
                           labelStyle: const TextStyle(color: AppColors.primary),
-                          hintText: 'Enter cash collected offline',
-                          prefixIcon: const Icon(Icons.currency_rupee, color: AppColors.primary),
+                          hintText: 'Enter amount collected',
+                          prefixIcon: const Icon(
+                            Icons.currency_rupee,
+                            color: AppColors.primary,
+                            size: 18,
+                          ),
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 14,
+                            vertical: 10,
+                          ),
                           enabledBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(15),
-                            borderSide: const BorderSide(color: AppColors.green200),
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: const BorderSide(
+                              color: AppColors.green200,
+                            ),
                           ),
                           focusedBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(15),
-                            borderSide: const BorderSide(color: AppColors.primary, width: 2),
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: const BorderSide(
+                              color: AppColors.primary,
+                              width: 2,
+                            ),
                           ),
                           filled: true,
-                          fillColor: AppColors.green50,
+                          fillColor: AppColors.green50.withValues(alpha: 0.5),
                         ),
                       ),
-                      const SizedBox(height: 20),
-                    ],
-                    _buildPaymentOption(
-                      icon: Icons.payments_outlined,
-                      title: 'Pay Full Amount',
-                      subtitle: isManager
-                          ? 'Collect ₹${calculatedFinalAmount.toStringAsFixed(0)} offline cash/UPI'
-                          : 'Pay ₹${finalAmount.toStringAsFixed(0)} online securely',
-                      onTap: () {
-                        _selectedPaymentType = 'Full';
-                        Get.back();
-                        if (isManager) {
-                          final customAmount = double.tryParse(_amountPaidController.text) ?? calculatedFinalAmount;
-                          final disc = double.tryParse(_additionalDiscountController.text) ?? 0.0;
-                          _finalizeManagerBooking(
-                            paymentType: 'Full', 
-                            amountPaid: customAmount,
-                            additionalDiscount: disc,
-                          );
-                        } else {
-                          _showPaymentConfirmationBottomSheet(
-                            payableAmount: finalAmount,
-                            paymentType: 'Full',
-                          );
-                        }
-                      },
-                    ),
-                    if (_bookingController.systemSettings['is_part_payment_active'] ==
-                        true) ...[
-                      const SizedBox(height: 12),
-                      _buildPaymentOption(
-                        icon: Icons.account_balance_wallet_outlined,
-                        title: 'Part Payment',
-                        subtitle: isManager
-                            ? 'Collect ₹${partPaymentTotal.toStringAsFixed(0)} offline cash now and rest later'
-                            : 'Pay ₹${partPaymentTotal.toStringAsFixed(0)} now and rest later',
-                        onTap: () {
-                          _selectedPaymentType = 'Part';
-                          Get.back();
-                          if (isManager) {
-                            final customAmount = double.tryParse(_amountPaidController.text) ?? partPaymentTotal;
-                            final disc = double.tryParse(_additionalDiscountController.text) ?? 0.0;
-                            _finalizeManagerBooking(
-                              paymentType: 'Part', 
-                              amountPaid: customAmount,
-                              additionalDiscount: disc,
-                            );
-                          } else {
-                            _showPaymentConfirmationBottomSheet(
-                              payableAmount: partPaymentTotal,
-                              paymentType: 'Part',
-                            );
-                          }
-                        },
+                      const SizedBox(height: 14),
+
+                      // Payment Type (Cash / UPI / Other)
+                      const Text(
+                        'Payment Type',
+                        style: TextStyle(
+                          color: AppColors.textMain,
+                          fontSize: 13,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
-                    ],
-                    if (_bookingController.systemSettings['is_pay_at_location_active'] ==
-                        true || isManager) ...[
-                      const SizedBox(height: 12),
-                      _buildPaymentOption(
-                        icon: Icons.location_on_outlined,
-                        title: 'Pay at Location',
-                        subtitle: isManager
-                            ? 'Book now and collect ₹${calculatedFinalAmount.toStringAsFixed(0)} at venue later'
-                            : 'Book now and pay ₹${finalAmount.toStringAsFixed(0)} at venue',
-                        onTap: () {
-                          _selectedPaymentType = 'PayAtLocation';
-                          Get.back();
-                          if (isManager) {
-                            final customAmount = double.tryParse(_amountPaidController.text) ?? 0.0;
-                            final disc = double.tryParse(_additionalDiscountController.text) ?? 0.0;
-                            _finalizeManagerBooking(
-                              paymentType: 'PayAtLocation', 
-                              amountPaid: customAmount,
-                              additionalDiscount: disc,
-                            );
-                          } else {
-                            _finalizePayAtLocation();
-                          }
-                        },
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          _buildPaymentModeChip(
+                            icon: Icons.payments_outlined,
+                            label: 'Cash',
+                            isSelected: selectedPaymentMode == 'Cash',
+                            onTap: () {
+                              selectedPaymentMode = 'Cash';
+                              sheetSetState(() {});
+                            },
+                          ),
+                          const SizedBox(width: 8),
+                          _buildPaymentModeChip(
+                            icon: Icons.qr_code,
+                            label: 'UPI',
+                            isSelected: selectedPaymentMode == 'UPI',
+                            onTap: () {
+                              selectedPaymentMode = 'UPI';
+                              sheetSetState(() {});
+                            },
+                          ),
+                          const SizedBox(width: 8),
+                          _buildPaymentModeChip(
+                            icon: Icons.more_horiz,
+                            label: 'Other',
+                            isSelected: selectedPaymentMode == 'Other',
+                            onTap: () {
+                              selectedPaymentMode = 'Other';
+                              sheetSetState(() {});
+                            },
+                          ),
+                        ],
                       ),
+                      const SizedBox(height: 14),
+
+                      // Payment Breakdown Summary
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: Colors.grey.shade50,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: Colors.grey.shade200),
+                        ),
+                        child: Column(
+                          children: [
+                            _buildSummaryRow(
+                              'Sub Total',
+                              '₹ ${_totalAmount.toStringAsFixed(0)}',
+                            ),
+                            if (_bookingController.discountAmount.value > 0) ...[
+                              const SizedBox(height: 5),
+                              _buildSummaryRow(
+                                'Coupon Discount',
+                                '- ₹ ${_bookingController.discountAmount.value.toStringAsFixed(0)}',
+                                valueColor: Colors.green.shade700,
+                              ),
+                            ],
+                            if (additionalDiscount > 0) ...[
+                              const SizedBox(height: 5),
+                              _buildSummaryRow(
+                                'Additional Discount',
+                                '- ₹ ${additionalDiscount.toStringAsFixed(0)}',
+                                valueColor: Colors.green.shade700,
+                              ),
+                            ],
+                            const SizedBox(height: 5),
+                            _buildSummaryRow(
+                              'Net Total',
+                              '₹ ${netTotal.toStringAsFixed(0)}',
+                              isBold: true,
+                            ),
+                            const Divider(height: 14),
+                            _buildSummaryRow(
+                              'Amount Collected ($selectedPaymentMode)',
+                              '₹ ${collectedAmount.toStringAsFixed(0)}',
+                              badgeColor: AppColors.green100,
+                              badgeTextColor: AppColors.primary,
+                            ),
+                            if (remainingDue > 0) ...[
+                              const SizedBox(height: 5),
+                              _buildSummaryRow(
+                                'Balance Due',
+                                '₹ ${remainingDue.toStringAsFixed(0)}',
+                                valueColor: Colors.red.shade700,
+                                isBold: true,
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+
+                      // Single Action Button: Confirm & Book
+                      SizedBox(
+                        width: double.infinity,
+                        height: 50,
+                        child: ElevatedButton(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.primary,
+                            foregroundColor: Colors.white,
+                            elevation: 0,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(14),
+                            ),
+                          ),
+                          onPressed: () {
+                            double amt =
+                                double.tryParse(_amountPaidController.text) ??
+                                0.0;
+                            if (amt < 0) {
+                              Get.snackbar(
+                                'Invalid Amount',
+                                'Collected amount cannot be negative',
+                              );
+                              return;
+                            }
+                            if (amt > netTotal) {
+                              Get.snackbar(
+                                'Invalid Amount',
+                                'Collected amount cannot exceed net total ₹${netTotal.toStringAsFixed(0)}',
+                              );
+                              return;
+                            }
+
+                            _showManagerBookingConfirmationDialog(
+                              netTotal: netTotal,
+                              collectedAmount: amt,
+                              additionalDiscount: additionalDiscount,
+                              paymentMode: selectedPaymentMode,
+                              turfName: turfName,
+                              dateStr: dateStr,
+                              timeRange: timeRange,
+                              duration: duration,
+                            );
+                          },
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              const Icon(Icons.check_circle_outline, size: 20),
+                              const SizedBox(width: 8),
+                              Text(
+                                collectedAmount > 0
+                                    ? 'Book Slot • Collect ₹${collectedAmount.toStringAsFixed(0)} ($selectedPaymentMode)'
+                                    : 'Book Slot • ₹0 Collected',
+                                style: const TextStyle(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
                     ],
-                    const SizedBox(height: 10),
-                  ],
-                ),
-              );
-            },
+                  ),
+                );
+              },
+            ),
           ),
         ),
       ),
-    ),
-    isScrollControlled: true,
-  );
+      isScrollControlled: true,
+    );
+  }
+
+  Widget _buildChoiceChip({
+    required String label,
+    required bool isSelected,
+    required VoidCallback onTap,
+  }) {
+    return Expanded(
+      child: GestureDetector(
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          padding: const EdgeInsets.symmetric(vertical: 10),
+          decoration: BoxDecoration(
+            color: isSelected ? AppColors.primary : AppColors.green50,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: isSelected ? AppColors.primary : AppColors.green200,
+              width: isSelected ? 1.5 : 1,
+            ),
+          ),
+          alignment: Alignment.center,
+          child: Text(
+            label,
+            style: TextStyle(
+              color: isSelected ? Colors.white : AppColors.textMain,
+              fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
+              fontSize: 12,
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPaymentModeChip({
+    required IconData icon,
+    required String label,
+    required bool isSelected,
+    required VoidCallback onTap,
+  }) {
+    return Expanded(
+      child: GestureDetector(
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          padding: const EdgeInsets.symmetric(vertical: 10),
+          decoration: BoxDecoration(
+            color: isSelected ? AppColors.primary : AppColors.green50,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: isSelected ? AppColors.primary : AppColors.green200,
+              width: isSelected ? 1.5 : 1,
+            ),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                icon,
+                size: 16,
+                color: isSelected ? Colors.white : AppColors.primary,
+              ),
+              const SizedBox(width: 6),
+              Text(
+                label,
+                style: TextStyle(
+                  color: isSelected ? Colors.white : AppColors.textMain,
+                  fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
+                  fontSize: 13,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showManagerBookingConfirmationDialog({
+    required double netTotal,
+    required double collectedAmount,
+    required double additionalDiscount,
+    required String paymentMode,
+    required String turfName,
+    required String dateStr,
+    required String timeRange,
+    required String duration,
+  }) {
+    final client = _bookingController.selectedClient.value;
+    String clientName =
+        client != null ? (client['name'] ?? 'Client') : 'Self / Direct Booking';
+    String clientMobile = client != null ? (client['mobile_number'] ?? '-') : '-';
+    double remainingDue = (netTotal - collectedAmount).clamp(0.0, netTotal);
+
+    Get.dialog(
+      Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        backgroundColor: Colors.white,
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: AppColors.green50,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Icon(
+                      Icons.assignment_turned_in,
+                      color: AppColors.primary,
+                      size: 24,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  const Expanded(
+                    child: Text(
+                      'Confirm Booking',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: AppColors.textMain,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade50,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.grey.shade200),
+                ),
+                child: Column(
+                  children: [
+                    _buildSummaryRow('Client', clientName, isBold: true),
+                    if (clientMobile != '-') ...[
+                      const SizedBox(height: 6),
+                      _buildSummaryRow('Mobile', clientMobile),
+                    ],
+                    const SizedBox(height: 6),
+                    _buildSummaryRow('Turf', turfName),
+                    const SizedBox(height: 6),
+                    _buildSummaryRow('Date', dateStr),
+                    const SizedBox(height: 6),
+                    _buildSummaryRow('Time', '$timeRange ($duration)'),
+                    const Divider(height: 16),
+                    _buildSummaryRow(
+                      'Total Amount',
+                      '₹ ${netTotal.toStringAsFixed(0)}',
+                      isBold: true,
+                    ),
+                    const SizedBox(height: 6),
+                    _buildSummaryRow(
+                      'Collecting Now',
+                      '₹ ${collectedAmount.toStringAsFixed(0)} ($paymentMode)',
+                      badgeColor: AppColors.green100,
+                      badgeTextColor: AppColors.primary,
+                    ),
+                    if (remainingDue > 0) ...[
+                      const SizedBox(height: 6),
+                      _buildSummaryRow(
+                        'Balance Due',
+                        '₹ ${remainingDue.toStringAsFixed(0)}',
+                        valueColor: Colors.red.shade700,
+                        isBold: true,
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              const SizedBox(height: 20),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        side: BorderSide(color: Colors.grey.shade300),
+                      ),
+                      onPressed: () => Get.back(),
+                      child: const Text(
+                        'Cancel',
+                        style: TextStyle(color: AppColors.textSecondary),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.primary,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        elevation: 0,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      onPressed: () {
+                        Get.back(); // Close confirmation dialog
+                        Get.back(); // Close manager bottom sheet
+                        final paymentType = collectedAmount >= netTotal
+                            ? 'Full'
+                            : (collectedAmount > 0 ? 'Part' : 'PayAtLocation');
+                        _finalizeManagerBooking(
+                          paymentType: paymentType,
+                          amountPaid: collectedAmount,
+                          additionalDiscount: additionalDiscount,
+                          paymentMethod: paymentMode,
+                        );
+                      },
+                      child: const Text(
+                        'Confirm & Book',
+                        style: TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   Widget _buildPaymentOption({
@@ -1193,6 +1800,7 @@ class _TurfDetailScreenState extends State<TurfDetailScreen> {
     required String paymentType,
     required double amountPaid,
     double? additionalDiscount,
+    String? paymentMethod,
   }) {
     if (_isLongBooking) {
       final couponCodes = _bookingController.appliedCoupons.map(
@@ -1209,6 +1817,7 @@ class _TurfDetailScreenState extends State<TurfDetailScreen> {
             couponCodes: couponCodes,
             amountPaid: amountPaid,
             additionalDiscount: additionalDiscount,
+            paymentMethod: paymentMethod,
           )
           .then((success) {
             if (success) {
@@ -1226,6 +1835,7 @@ class _TurfDetailScreenState extends State<TurfDetailScreen> {
             couponCode: _bookingController.appliedCoupon['code'],
             amountPaid: amountPaid,
             additionalDiscount: additionalDiscount,
+            paymentMethod: paymentMethod,
           )
           .then((success) {
             if (success) {

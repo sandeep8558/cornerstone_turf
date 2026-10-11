@@ -46,6 +46,7 @@ class BookingController extends Controller
             'client_id' => 'nullable|exists:users,id',
             'amount_paid' => 'nullable|numeric|min:0',
             'additional_discount' => 'nullable|numeric|min:0',
+            'payment_method' => 'nullable|string|in:Cash,UPI,App,Other',
         ]);
 
         $settings = Setting::first();
@@ -191,9 +192,12 @@ class BookingController extends Controller
 
             // Create Booking Payment record
             if ($request->payment_type !== 'PayAtLocation' || ($isManagerOrAdmin && $paidAmount > 0)) {
+                $paymentMethodType = ($isManagerOrAdmin && $request->filled('payment_method')) 
+                    ? $request->payment_method 
+                    : 'App';
                 BookingPayment::create([
                     'booking_id' => $booking->id,
-                    'type' => 'App',
+                    'type' => $paymentMethodType,
                     'amount' => $paidAmount,
                 ]);
             }
@@ -314,6 +318,7 @@ class BookingController extends Controller
             'client_id' => 'nullable|exists:users,id',
             'amount_paid' => 'nullable|numeric|min:0',
             'additional_discount' => 'nullable|numeric|min:0',
+            'payment_method' => 'nullable|string|in:Cash,UPI,App,Other',
         ]);
 
         $settings = Setting::first();
@@ -580,23 +585,30 @@ class BookingController extends Controller
                 $isFullyPaid = ($request->payment_type === 'Full') || 
                                ($isManagerOrAdmin && $request->has('amount_paid') && abs(floatval($request->amount_paid) - floatval($finalAmount)) < 0.01);
 
-                if ($isFullyPaid) {
+                if ($isManagerOrAdmin && $request->has('amount_paid')) {
+                    if ($isFullyPaid) {
+                        $bookingPaidAmount = $bookingFinalAmount;
+                    } else {
+                        if ($finalAmount > 0) {
+                            $bookingPaidAmount = $isLast ? $remainingPaid : round(($bookingFinalAmount / $finalAmount) * $totalPaidAmount, 2);
+                        } else {
+                            $bookingPaidAmount = 0;
+                        }
+                        $remainingPaid -= $bookingPaidAmount;
+                    }
+                } elseif ($request->payment_type === 'Full') {
                     $bookingPaidAmount = $bookingFinalAmount;
                 } elseif ($request->payment_type === 'Part') {
                     $bookingPaidAmount = $settings->min_part_payment * count($data['slot_ids']);
-                } elseif ($isManagerOrAdmin && $request->has('amount_paid')) {
-                    if ($finalAmount > 0) {
-                        $bookingPaidAmount = $isLast ? $remainingPaid : round(($bookingFinalAmount / $finalAmount) * $totalPaidAmount, 2);
-                    } else {
-                        $bookingPaidAmount = 0;
-                    }
-                    $remainingPaid -= $bookingPaidAmount;
                 }
 
                 if ($request->payment_type !== 'PayAtLocation' || ($isManagerOrAdmin && $bookingPaidAmount > 0)) {
+                    $paymentMethodType = ($isManagerOrAdmin && $request->filled('payment_method')) 
+                        ? $request->payment_method 
+                        : 'App';
                     BookingPayment::create([
                         'booking_id' => $booking->id,
-                        'type' => 'App',
+                        'type' => $paymentMethodType,
                         'amount' => $bookingPaidAmount,
                     ]);
                 }

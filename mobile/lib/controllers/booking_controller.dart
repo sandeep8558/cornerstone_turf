@@ -557,6 +557,7 @@ class BookingController extends GetxController {
     String? couponCode,
     double? amountPaid,
     double? additionalDiscount,
+    String? paymentMethod,
   }) async {
     try {
       String? token = await _storage.read(key: 'access_token');
@@ -573,6 +574,7 @@ class BookingController extends GetxController {
       if (selectedClient.value != null) body['client_id'] = selectedClient.value!['id'];
       if (amountPaid != null) body['amount_paid'] = amountPaid;
       if (additionalDiscount != null) body['additional_discount'] = additionalDiscount;
+      if (paymentMethod != null) body['payment_method'] = paymentMethod;
 
       final response = await http.post(
         Uri.parse('${ApiConstants.baseUrl}/bookings'),
@@ -660,6 +662,7 @@ class BookingController extends GetxController {
     Map<String, String>? couponCodes,
     double? amountPaid,
     double? additionalDiscount,
+    String? paymentMethod,
   }) async {
     try {
       String? token = await _storage.read(key: 'access_token');
@@ -682,6 +685,7 @@ class BookingController extends GetxController {
       if (selectedClient.value != null) body['client_id'] = selectedClient.value!['id'];
       if (amountPaid != null) body['amount_paid'] = amountPaid;
       if (additionalDiscount != null) body['additional_discount'] = additionalDiscount;
+      if (paymentMethod != null) body['payment_method'] = paymentMethod;
 
       final response = await http.post(
         Uri.parse('${ApiConstants.baseUrl}/bookings/long'),
