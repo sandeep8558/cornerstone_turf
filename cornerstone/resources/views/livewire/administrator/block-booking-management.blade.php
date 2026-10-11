@@ -44,6 +44,20 @@ new class extends Component {
     }
 
     public function toggleSlot($slotId) {
+        if (!in_array($slotId, $this->selected_slots) && $this->date) {
+            $isBooked = DB::table('booking_slot')
+                ->join('bookings', 'booking_slot.booking_id', '=', 'bookings.id')
+                ->where('booking_slot.slot_id', $slotId)
+                ->whereDate('bookings.date', $this->date)
+                ->whereIn('bookings.status', ['Success'])
+                ->exists();
+
+            if ($isBooked) {
+                session()->flash('error', 'This slot is already booked by a customer and cannot be blocked.');
+                return;
+            }
+        }
+
         if (in_array($slotId, $this->selected_slots)) {
             $this->selected_slots = array_diff($this->selected_slots, [$slotId]);
         } else {
@@ -71,7 +85,26 @@ new class extends Component {
             'reason' => 'nullable|string|max:255',
         ]);
 
+        // Validate that none of the selected slots are already booked by customers
+        $alreadyBookedSlots = DB::table('booking_slot')
+            ->join('bookings', 'booking_slot.booking_id', '=', 'bookings.id')
+            ->join('slots', 'booking_slot.slot_id', '=', 'slots.id')
+            ->whereIn('booking_slot.slot_id', $this->selected_slots)
+            ->whereDate('bookings.date', $this->date)
+            ->whereIn('bookings.status', ['Success'])
+            ->select('slots.from', 'slots.to')
+            ->get();
+
+        if ($alreadyBookedSlots->isNotEmpty()) {
+            $times = $alreadyBookedSlots->map(fn($s) => Carbon::parse($s->from)->format('g:i A') . ' - ' . Carbon::parse($s->to)->format('g:i A'))->join(', ');
+            session()->flash('error', "Cannot block slot(s): [{$times}] because they are already booked on this date.");
+            return;
+        }
+
         DB::transaction(function () {
+            // Lock slots for update to prevent race conditions with customer bookings
+            Slot::whereIn('id', $this->selected_slots)->lockForUpdate()->get();
+
             $block = BlockBooking::updateOrCreate(
                 ['id' => $this->block_id],
                 [
@@ -107,6 +140,16 @@ new class extends Component {
     public function availableSlots() {
         if (!$this->turf_id) return collect();
 
+        $bookedSlotIds = [];
+        if ($this->date) {
+            $bookedSlotIds = DB::table('booking_slot')
+                ->join('bookings', 'booking_slot.booking_id', '=', 'bookings.id')
+                ->whereDate('bookings.date', $this->date)
+                ->whereIn('bookings.status', ['Success'])
+                ->pluck('booking_slot.slot_id')
+                ->toArray();
+        }
+
         return Slot::where('turf_id', $this->turf_id)
             ->where('is_active', true)
             ->with('slotCategory')
@@ -114,11 +157,12 @@ new class extends Component {
             ->groupBy(function($slot) {
                 return $slot->slotCategory->category_name ?? 'Other';
             })
-            ->map(function($categorySlots) {
-                return $categorySlots->map(function($slot) {
+            ->map(function($categorySlots) use ($bookedSlotIds) {
+                return $categorySlots->map(function($slot) use ($bookedSlotIds) {
                     return [
                         'id' => $slot->id,
                         'time' => Carbon::parse($slot->from)->format('g:i A') . ' - ' . Carbon::parse($slot->to)->format('g:i A'),
+                        'is_booked' => in_array($slot->id, $bookedSlotIds),
                     ];
                 });
             });
@@ -137,6 +181,13 @@ new class extends Component {
     @if (session()->has('message'))
         <div class="alert alert-success border-0 shadow-sm rounded-4 mb-4 d-flex align-items-center justify-content-between">
             <span>{{ session('message') }}</span>
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    @endif
+
+    @if (session()->has('error'))
+        <div class="alert alert-danger border-0 shadow-sm rounded-4 mb-4 d-flex align-items-center justify-content-between">
+            <span>{{ session('error') }}</span>
             <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
         </div>
     @endif
@@ -237,20 +288,28 @@ new class extends Component {
                                     <div class="row row-cols-2 row-cols-md-3 g-3">
                                         @foreach($slots as $slot)
                                             <div class="col">
-                                                <div wire:click="toggleSlot({{ $slot['id'] }})" 
-                                                    class="border rounded-4 p-3 d-flex flex-column gap-1 cursor-pointer transition-all position-relative overflow-hidden"
-                                                    style="{{ in_array($slot['id'], $this->selected_slots) ? 'border-color: #ef4444 !important; background: #fef2f2;' : 'background: #fefefe;' }}">
-                                                    
-                                                    @if(in_array($slot['id'], $this->selected_slots))
-                                                        <div class="position-absolute top-0 end-0 p-2">
-                                                            <svg style="color: #ef4444; width: 1rem; height: 1rem;" fill="currentColor" viewBox="0 0 20 20">
-                                                                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
-                                                            </svg>
-                                                        </div>
-                                                    @endif
-                                                    <span class="small fw-bold text-dark">{{ $slot['time'] }}</span>
-                                                    <span class="extra-small text-muted">Select to Block</span>
-                                                </div>
+                                                @if(!empty($slot['is_booked']))
+                                                    <div class="border rounded-4 p-3 d-flex flex-column gap-1 position-relative overflow-hidden"
+                                                        style="background: #f8fafc; border-color: #e2e8f0 !important; opacity: 0.65; cursor: not-allowed;">
+                                                        <span class="small fw-bold text-muted">{{ $slot['time'] }}</span>
+                                                        <span class="badge bg-warning text-dark extra-small align-self-start">Booked (Occupied)</span>
+                                                    </div>
+                                                @else
+                                                    <div wire:click="toggleSlot({{ $slot['id'] }})" 
+                                                        class="border rounded-4 p-3 d-flex flex-column gap-1 cursor-pointer transition-all position-relative overflow-hidden"
+                                                        style="{{ in_array($slot['id'], $this->selected_slots) ? 'border-color: #ef4444 !important; background: #fef2f2;' : 'background: #fefefe;' }}">
+                                                        
+                                                        @if(in_array($slot['id'], $this->selected_slots))
+                                                            <div class="position-absolute top-0 end-0 p-2">
+                                                                <svg style="color: #ef4444; width: 1rem; height: 1rem;" fill="currentColor" viewBox="0 0 20 20">
+                                                                    <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
+                                                                </svg>
+                                                            </div>
+                                                        @endif
+                                                        <span class="small fw-bold text-dark">{{ $slot['time'] }}</span>
+                                                        <span class="extra-small text-muted">{{ in_array($slot['id'], $this->selected_slots) ? 'Selected for Block' : 'Select to Block' }}</span>
+                                                    </div>
+                                                @endif
                                             </div>
                                         @endforeach
                                     </div>

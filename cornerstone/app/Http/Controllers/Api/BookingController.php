@@ -69,30 +69,44 @@ class BookingController extends Controller
             }
         }
 
-        return DB::transaction(function () use ($request, $settings, $targetUserId, $isManagerOrAdmin) {
-            $date = $request->date;
-            $dayOfWeek = strtolower(Carbon::parse($date)->format('D'));
-            $amountColumn = $dayOfWeek . '_amount';
+        try {
+            return DB::transaction(function () use ($request, $settings, $targetUserId, $isManagerOrAdmin) {
+                $date = $request->date;
+                $dayOfWeek = strtolower(Carbon::parse($date)->format('D'));
+                $amountColumn = $dayOfWeek . '_amount';
 
-            // Verify slots availability and calculate total
-            $slots = Slot::whereIn('id', $request->slot_ids)->get();
-            $totalAmount = 0;
+                // Lock requested slots for update to prevent concurrent double-bookings
+                $slots = Slot::whereIn('id', $request->slot_ids)->lockForUpdate()->get();
+                $totalAmount = 0;
 
-            foreach ($slots as $slot) {
-                // Check if already booked
-                $isBooked = DB::table('booking_slot')
-                    ->join('bookings', 'booking_slot.booking_id', '=', 'bookings.id')
-                    ->where('booking_slot.slot_id', $slot->id)
-                    ->whereDate('bookings.date', $date)
-                    ->whereIn('bookings.status', ['Success']) // Only Success status bookings block the slot
-                    ->exists();
+                foreach ($slots as $slot) {
+                    // Check if already booked
+                    $isBooked = DB::table('booking_slot')
+                        ->join('bookings', 'booking_slot.booking_id', '=', 'bookings.id')
+                        ->where('booking_slot.slot_id', $slot->id)
+                        ->whereDate('bookings.date', $date)
+                        ->whereIn('bookings.status', ['Success']) // Only Success status bookings block the slot
+                        ->exists();
 
-                if ($isBooked) {
-                    throw new \Exception("Slot {$slot->from} - {$slot->to} is already booked.");
+                    if ($isBooked) {
+                        throw new \Exception("Slot {$slot->from} - {$slot->to} is already booked.");
+                    }
+
+                    // Check if administratively blocked
+                    $block = DB::table('block_booking_slots')
+                        ->join('block_bookings', 'block_booking_slots.block_booking_id', '=', 'block_bookings.id')
+                        ->where('block_booking_slots.slot_id', $slot->id)
+                        ->whereDate('block_bookings.date', $date)
+                        ->select('block_bookings.reason')
+                        ->first();
+
+                    if ($block) {
+                        $reason = !empty($block->reason) ? " ({$block->reason})" : "";
+                        throw new \Exception("Slot {$slot->from} - {$slot->to} is blocked by administration{$reason}.");
+                    }
+
+                    $totalAmount += $slot->$amountColumn;
                 }
-
-                $totalAmount += $slot->$amountColumn;
-            }
 
             // Handle Coupon
             $discountAmount = 0;
@@ -217,7 +231,10 @@ class BookingController extends Controller
                 'booking' => $booking->load(['turf', 'slots', 'couponUsage.coupon'])
             ]);
         });
+    } catch (\Exception $e) {
+        return response()->json(['message' => $e->getMessage()], 422);
     }
+}
 
     public function calculateLongBooking(Request $request)
     {
@@ -269,11 +286,20 @@ class BookingController extends Controller
                     ->whereIn('bookings.status', ['Success'])
                     ->exists();
 
-                if ($isBooked) {
+                // Check if administratively blocked
+                $block = DB::table('block_booking_slots')
+                    ->join('block_bookings', 'block_booking_slots.block_booking_id', '=', 'block_bookings.id')
+                    ->where('block_booking_slots.slot_id', $slot->id)
+                    ->whereDate('block_bookings.date', $dateStr)
+                    ->select('block_bookings.reason')
+                    ->first();
+
+                if ($isBooked || $block) {
                     $dailyUnavailable[] = [
                         'id' => $slot->id,
                         'from' => $slot->from,
-                        'to' => $slot->to
+                        'to' => $slot->to,
+                        'reason' => $isBooked ? 'Occupied' : (!empty($block->reason) ? "Blocked ({$block->reason})" : "Blocked")
                     ];
                 } else {
                     $dailyAvailable[] = [
@@ -341,47 +367,55 @@ class BookingController extends Controller
             }
         }
 
-        return DB::transaction(function () use ($request, $settings, $targetUserId, $isManagerOrAdmin) {
-            $datesToProcess = [];
-            if ($request->has('dates')) {
-                $datesToProcess = $request->dates;
-                usort($datesToProcess, function($a, $b) {
-                    return strcmp($a, $b);
-                });
-            } else {
-                $fromDate = Carbon::parse($request->from_date);
-                $toDate = Carbon::parse($request->to_date);
-                for ($date = $fromDate->copy(); $date->lte($toDate); $date->addDay()) {
-                    $datesToProcess[] = $date->format('Y-m-d');
-                }
-            }
-
-            $slots = Slot::whereIn('id', $request->slot_ids)->get();
-
-            $totalOriginalAmount = 0;
-            $datesToBook = [];
-
-            // 1. Availability and Total Price check
-            foreach ($datesToProcess as $dateStr) {
-                $dayOfWeek = strtolower(Carbon::parse($dateStr)->format('D'));
-                $amountColumn = $dayOfWeek . '_amount';
-
-                $availableSlotIdsForDay = [];
-                $dayAmount = 0;
-
-                foreach ($slots as $slot) {
-                    $isBooked = DB::table('booking_slot')
-                        ->join('bookings', 'booking_slot.booking_id', '=', 'bookings.id')
-                        ->where('booking_slot.slot_id', $slot->id)
-                        ->whereDate('bookings.date', $dateStr)
-                        ->whereIn('bookings.status', ['Success'])
-                        ->exists();
-
-                    if (!$isBooked) {
-                        $availableSlotIdsForDay[] = $slot->id;
-                        $dayAmount += $slot->$amountColumn;
+        try {
+            return DB::transaction(function () use ($request, $settings, $targetUserId, $isManagerOrAdmin) {
+                $datesToProcess = [];
+                if ($request->has('dates')) {
+                    $datesToProcess = $request->dates;
+                    usort($datesToProcess, function($a, $b) {
+                        return strcmp($a, $b);
+                    });
+                } else {
+                    $fromDate = Carbon::parse($request->from_date);
+                    $toDate = Carbon::parse($request->to_date);
+                    for ($date = $fromDate->copy(); $date->lte($toDate); $date->addDay()) {
+                        $datesToProcess[] = $date->format('Y-m-d');
                     }
                 }
+
+                // Lock slots for update to prevent concurrent race conditions
+                $slots = Slot::whereIn('id', $request->slot_ids)->lockForUpdate()->get();
+
+                $totalOriginalAmount = 0;
+                $datesToBook = [];
+
+                // 1. Availability and Total Price check
+                foreach ($datesToProcess as $dateStr) {
+                    $dayOfWeek = strtolower(Carbon::parse($dateStr)->format('D'));
+                    $amountColumn = $dayOfWeek . '_amount';
+
+                    $availableSlotIdsForDay = [];
+                    $dayAmount = 0;
+
+                    foreach ($slots as $slot) {
+                        $isBooked = DB::table('booking_slot')
+                            ->join('bookings', 'booking_slot.booking_id', '=', 'bookings.id')
+                            ->where('booking_slot.slot_id', $slot->id)
+                            ->whereDate('bookings.date', $dateStr)
+                            ->whereIn('bookings.status', ['Success'])
+                            ->exists();
+
+                        $isBlocked = DB::table('block_booking_slots')
+                            ->join('block_bookings', 'block_booking_slots.block_booking_id', '=', 'block_bookings.id')
+                            ->where('block_booking_slots.slot_id', $slot->id)
+                            ->whereDate('block_bookings.date', $dateStr)
+                            ->exists();
+
+                        if (!$isBooked && !$isBlocked) {
+                            $availableSlotIdsForDay[] = $slot->id;
+                            $dayAmount += $slot->$amountColumn;
+                        }
+                    }
 
                 if (!empty($availableSlotIdsForDay)) {
                     $datesToBook[$dateStr] = [
@@ -562,6 +596,38 @@ class BookingController extends Controller
                     'status' => 'Success',
                 ]);
 
+                // Concurrency and block check before syncing slots
+                foreach ($data['slot_ids'] as $sId) {
+                    $isDoubleBooked = DB::table('booking_slot')
+                        ->join('bookings', 'booking_slot.booking_id', '=', 'bookings.id')
+                        ->where('booking_slot.slot_id', $sId)
+                        ->whereDate('bookings.date', $dateStr)
+                        ->whereIn('bookings.status', ['Success'])
+                        ->exists();
+
+                    if ($isDoubleBooked) {
+                        $slotObj = $slots->firstWhere('id', $sId);
+                        $from = $slotObj ? $slotObj->from : 'Slot';
+                        $to = $slotObj ? $slotObj->to : '';
+                        throw new \Exception("Slot {$from} - {$to} on {$dateStr} is already booked.");
+                    }
+
+                    $block = DB::table('block_booking_slots')
+                        ->join('block_bookings', 'block_booking_slots.block_booking_id', '=', 'block_bookings.id')
+                        ->where('block_booking_slots.slot_id', $sId)
+                        ->whereDate('block_bookings.date', $dateStr)
+                        ->select('block_bookings.reason')
+                        ->first();
+
+                    if ($block) {
+                        $slotObj = $slots->firstWhere('id', $sId);
+                        $from = $slotObj ? $slotObj->from : 'Slot';
+                        $to = $slotObj ? $slotObj->to : '';
+                        $reason = !empty($block->reason) ? " ({$block->reason})" : "";
+                        throw new \Exception("Slot {$from} - {$to} on {$dateStr} is blocked by administration{$reason}.");
+                    }
+                }
+
                 // Sync slots
                 $booking->slots()->sync($data['slot_ids']);
                 $bookingsCreated[] = $booking;
@@ -629,7 +695,10 @@ class BookingController extends Controller
                 'total_amount' => $finalAmount,
             ]);
         });
+    } catch (\Exception $e) {
+        return response()->json(['message' => $e->getMessage()], 422);
     }
+}
 
     /**
      * Display the specified booking.

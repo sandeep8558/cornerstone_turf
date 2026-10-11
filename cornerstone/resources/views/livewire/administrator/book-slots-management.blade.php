@@ -189,11 +189,40 @@ new class extends Component {
 
         try {
             DB::transaction(function () {
+                // Lock slots for update to prevent concurrent double-booking
+                $slots = Slot::whereIn('id', $this->selected_slots)->lockForUpdate()->get();
+
+                // Validate each slot is not already booked or blocked
+                foreach ($slots as $slot) {
+                    $isBooked = DB::table('booking_slot')
+                        ->join('bookings', 'booking_slot.booking_id', '=', 'bookings.id')
+                        ->where('booking_slot.slot_id', $slot->id)
+                        ->whereDate('bookings.date', $this->selected_date)
+                        ->whereIn('bookings.status', ['Success'])
+                        ->exists();
+
+                    if ($isBooked) {
+                        throw new \Exception("Slot {$slot->from} - {$slot->to} has already been booked by another customer.");
+                    }
+
+                    $block = DB::table('block_booking_slots')
+                        ->join('block_bookings', 'block_booking_slots.block_booking_id', '=', 'block_bookings.id')
+                        ->where('block_booking_slots.slot_id', $slot->id)
+                        ->whereDate('block_bookings.date', $this->selected_date)
+                        ->select('block_bookings.reason')
+                        ->first();
+
+                    if ($block) {
+                        $reason = !empty($block->reason) ? " ({$block->reason})" : "";
+                        throw new \Exception("Slot {$slot->from} - {$slot->to} is blocked by administration{$reason}.");
+                    }
+                }
+
                 // Get day of week for pricing
                 $dayOfWeek = strtolower(Carbon::parse($this->selected_date)->format('D'));
                 $priceField = $dayOfWeek . '_amount';
                 
-                $totalBookingAmount = Slot::whereIn('id', $this->selected_slots)->sum($priceField);
+                $totalBookingAmount = $slots->sum($priceField);
 
                 // Determine payment status based on amount comparison
                 $pType = 'Full';
