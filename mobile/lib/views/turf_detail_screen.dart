@@ -886,10 +886,11 @@ class _TurfDetailScreenState extends State<TurfDetailScreen> {
       _showPaymentTypeDialog();
     } else {
       _selectedPaymentType = 'Full';
-      _proceedToRazorpay(
-        _isLongBooking
+      _showPaymentConfirmationBottomSheet(
+        payableAmount: _isLongBooking
             ? _totalAmount
             : _totalAmount - _bookingController.discountAmount.value,
+        paymentType: 'Full',
       );
     }
   }
@@ -1037,7 +1038,10 @@ class _TurfDetailScreenState extends State<TurfDetailScreen> {
                             additionalDiscount: disc,
                           );
                         } else {
-                          _proceedToRazorpay(finalAmount);
+                          _showPaymentConfirmationBottomSheet(
+                            payableAmount: finalAmount,
+                            paymentType: 'Full',
+                          );
                         }
                       },
                     ),
@@ -1062,7 +1066,10 @@ class _TurfDetailScreenState extends State<TurfDetailScreen> {
                               additionalDiscount: disc,
                             );
                           } else {
-                            _proceedToRazorpay(partPaymentTotal);
+                            _showPaymentConfirmationBottomSheet(
+                              payableAmount: partPaymentTotal,
+                              paymentType: 'Part',
+                            );
                           }
                         },
                       ),
@@ -1229,6 +1236,423 @@ class _TurfDetailScreenState extends State<TurfDetailScreen> {
     }
   }
 
+  String _getSelectedSlotsTimeRange() {
+    try {
+      List<dynamic> selectedSlots = _bookingController.availableSlots
+          .where((s) => _selectedSlotIds.contains(s['id']))
+          .toList();
+      if (selectedSlots.isEmpty) return 'No slots selected';
+
+      selectedSlots.sort((a, b) =>
+          (a['from']?.toString() ?? '').compareTo(b['from']?.toString() ?? ''));
+
+      String formatT(String? t, {bool isEnd = false}) {
+        if (t == null || t.isEmpty) return '';
+        if (isEnd && (t.startsWith('23:59') || t.startsWith('24:00'))) {
+          return '12:00 AM';
+        }
+        try {
+          final p = DateFormat('HH:mm:ss').parse(t);
+          if (isEnd && p.hour == 23 && p.minute >= 59) return '12:00 AM';
+          return DateFormat('hh:mm a').format(p);
+        } catch (_) {
+          return t;
+        }
+      }
+
+      String from = formatT(selectedSlots.first['from']?.toString());
+      String to = formatT(selectedSlots.last['to']?.toString(), isEnd: true);
+      return '$from to $to';
+    } catch (_) {
+      return '';
+    }
+  }
+
+  String _getSelectedSlotsDuration() {
+    int minutes = 0;
+    for (var slotId in _selectedSlotIds) {
+      dynamic slot;
+      for (var s in _bookingController.availableSlots) {
+        if (s['id'] == slotId) {
+          slot = s;
+          break;
+        }
+      }
+      if (slot != null) {
+        minutes += int.tryParse(slot['minutes']?.toString() ?? '30') ?? 30;
+      } else {
+        minutes += 30;
+      }
+    }
+    double hrs = minutes / 60.0;
+    if (hrs % 1 == 0) {
+      int h = hrs.toInt();
+      return '$h ${h == 1 ? 'hr' : 'hrs'}';
+    }
+    return '${hrs.toStringAsFixed(1)} hrs';
+  }
+
+  void _showPaymentConfirmationBottomSheet({
+    required double payableAmount,
+    required String paymentType,
+  }) {
+    double discount = _isLongBooking ? 0.0 : _bookingController.discountAmount.value;
+    double totalBookingAmount = _isLongBooking ? _totalAmount : (_totalAmount - discount);
+    double remainingBalance = (totalBookingAmount - payableAmount).clamp(0.0, double.infinity);
+    String timeRange = _getSelectedSlotsTimeRange();
+    String duration = _getSelectedSlotsDuration();
+    String turfName = _currentTurf?['name']?.toString() ?? 'Cornerstone Turf';
+    String dateStr = _isLongBooking
+        ? (_isScatteredBooking
+            ? '${_scatteredDates.length} Selected Dates'
+            : '${DateFormat('dd MMM').format(_longBookingFromDate)} - ${DateFormat('dd MMM yyyy').format(_longBookingToDate)}')
+        : DateFormat('EEEE, dd MMM yyyy').format(_selectedDate);
+
+    Get.bottomSheet(
+      Padding(
+        padding: EdgeInsets.only(
+          bottom: MediaQuery.of(Get.context!).viewInsets.bottom,
+        ),
+        child: Container(
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          child: SafeArea(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Center(
+                    child: Container(
+                      width: 40,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade300,
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text(
+                        'Confirm Booking & Pay',
+                        style: TextStyle(
+                          color: AppColors.textMain,
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.close, size: 20, color: AppColors.textSecondary),
+                        onPressed: () => Get.back(),
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Turf & Slot Info Card
+                  Container(
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: AppColors.green50,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: AppColors.green200),
+                    ),
+                    child: Column(
+                      children: [
+                        Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: const Icon(Icons.sports_soccer, color: AppColors.primary, size: 20),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    turfName,
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 15,
+                                      color: AppColors.textMain,
+                                    ),
+                                  ),
+                                  Text(
+                                    dateStr,
+                                    style: const TextStyle(
+                                      fontSize: 12,
+                                      color: AppColors.textSecondary,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                        const Divider(height: 20, color: AppColors.green200),
+                        Row(
+                          children: [
+                            const Icon(Icons.access_time, size: 16, color: AppColors.primary),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                timeRange,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 13,
+                                  color: AppColors.textMain,
+                                ),
+                              ),
+                            ),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(color: AppColors.green200),
+                              ),
+                              child: Text(
+                                '$duration (${_selectedSlotIds.length} slots)',
+                                style: const TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.bold,
+                                  color: AppColors.primary,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  const SizedBox(height: 16),
+
+                  // Payment Breakdown
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade50,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: Colors.grey.shade200),
+                    ),
+                    child: Column(
+                      children: [
+                        _buildSummaryRow('Sub Total', '₹ ${_totalAmount.toStringAsFixed(0)}'),
+                        if (discount > 0) ...[
+                          const SizedBox(height: 8),
+                          _buildSummaryRow(
+                            'Coupon Discount',
+                            '- ₹ ${discount.toStringAsFixed(0)}',
+                            valueColor: Colors.green.shade700,
+                          ),
+                        ],
+                        const SizedBox(height: 8),
+                        _buildSummaryRow(
+                          'Total Booking Amount',
+                          '₹ ${totalBookingAmount.toStringAsFixed(0)}',
+                          isBold: true,
+                        ),
+                        const Divider(height: 20),
+                        _buildSummaryRow(
+                          'Payment Option',
+                          paymentType == 'Part' ? 'Part Payment' : 'Full Payment',
+                          badgeColor: paymentType == 'Part' ? Colors.orange.shade100 : AppColors.green100,
+                          badgeTextColor: paymentType == 'Part' ? Colors.orange.shade900 : AppColors.primary,
+                        ),
+                        if (paymentType == 'Part' && remainingBalance > 0) ...[
+                          const SizedBox(height: 8),
+                          _buildSummaryRow(
+                            'Pay at Venue Later',
+                            '₹ ${remainingBalance.toStringAsFixed(0)}',
+                            valueColor: Colors.orange.shade800,
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+
+                  const SizedBox(height: 16),
+
+                  // Amount Payable Highlight Box
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [
+                          AppColors.primary.withValues(alpha: 0.08),
+                          AppColors.primary.withValues(alpha: 0.02),
+                        ],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Amount Payable Now',
+                              style: TextStyle(
+                                fontSize: 13,
+                                color: AppColors.textSecondary,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                            if (paymentType == 'Part')
+                              Text(
+                                '₹${remainingBalance.toStringAsFixed(0)} due at location',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: Colors.orange.shade800,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                          ],
+                        ),
+                        Text(
+                          '₹ ${payableAmount.toStringAsFixed(0)}',
+                          style: const TextStyle(
+                            fontSize: 22,
+                            fontWeight: FontWeight.w800,
+                            color: AppColors.primary,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  const SizedBox(height: 12),
+
+                  // Notice
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Icon(Icons.info_outline, size: 14, color: Colors.grey.shade600),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          'Once confirmed, transactions cannot be cancelled and amounts are non-refundable.',
+                          style: TextStyle(fontSize: 11, color: Colors.grey.shade600, height: 1.3),
+                        ),
+                      ),
+                    ],
+                  ),
+
+                  const SizedBox(height: 20),
+
+                  // Action Buttons
+                  SizedBox(
+                    width: double.infinity,
+                    height: 52,
+                    child: ElevatedButton.icon(
+                      onPressed: () {
+                        Get.back();
+                        _proceedToRazorpay(payableAmount);
+                      },
+                      icon: const Icon(Icons.lock_outline, size: 18),
+                      label: Text(
+                        'Pay ₹${payableAmount.toStringAsFixed(0)} via Razorpay',
+                        style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.primary,
+                        foregroundColor: Colors.white,
+                        elevation: 2,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Center(
+                    child: TextButton(
+                      onPressed: () => Get.back(),
+                      child: const Text(
+                        'Cancel',
+                        style: TextStyle(
+                          color: AppColors.textSecondary,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+      isScrollControlled: true,
+    );
+  }
+
+  Widget _buildSummaryRow(
+    String label,
+    String value, {
+    bool isBold = false,
+    Color? valueColor,
+    Color? badgeColor,
+    Color? badgeTextColor,
+  }) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(
+          label,
+          style: TextStyle(
+            color: isBold ? AppColors.textMain : AppColors.textSecondary,
+            fontSize: isBold ? 14 : 13,
+            fontWeight: isBold ? FontWeight.bold : FontWeight.normal,
+          ),
+        ),
+        if (badgeColor != null)
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+            decoration: BoxDecoration(
+              color: badgeColor,
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: Text(
+              value,
+              style: TextStyle(
+                color: badgeTextColor ?? AppColors.textMain,
+                fontSize: 11,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          )
+        else
+          Text(
+            value,
+            style: TextStyle(
+              color: valueColor ?? (isBold ? AppColors.textMain : AppColors.textMain),
+              fontSize: isBold ? 15 : 13,
+              fontWeight: isBold ? FontWeight.bold : FontWeight.w600,
+            ),
+          ),
+      ],
+    );
+  }
+
   void _proceedToRazorpay(double amount) {
     if (GetPlatform.isWeb || !_isRazorpayInitialised) {
       Get.snackbar(
@@ -1241,6 +1665,10 @@ class _TurfDetailScreenState extends State<TurfDetailScreen> {
       return;
     }
 
+    final authController = Get.find<AuthController>();
+    final userContact = authController.user['mobile_number']?.toString() ?? '';
+    final userEmail = authController.user['email']?.toString() ?? '';
+
     var options = {
       'key':
           _bookingController.systemSettings['razorpay_key'] ??
@@ -1248,7 +1676,7 @@ class _TurfDetailScreenState extends State<TurfDetailScreen> {
       'amount': (amount * 100).toInt(),
       'name': 'Cornerstone Turf',
       'description': 'Turf Booking',
-      'prefill': {'contact': '', 'email': ''},
+      'prefill': {'contact': userContact, 'email': userEmail},
       'external': {
         'wallets': ['paytm'],
       },
