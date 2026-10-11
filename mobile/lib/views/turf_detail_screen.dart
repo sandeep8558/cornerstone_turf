@@ -39,6 +39,8 @@ class _TurfDetailScreenState extends State<TurfDetailScreen> {
   final List<int> _selectedSlotIds = [];
   double _totalAmount = 0;
   final TextEditingController _couponController = TextEditingController();
+  final FocusNode _couponFocusNode = FocusNode();
+  final GlobalKey _couponKey = GlobalKey();
   final TextEditingController _amountPaidController = TextEditingController();
   final TextEditingController _additionalDiscountController = TextEditingController();
   String _selectedPaymentType = 'Full';
@@ -52,6 +54,21 @@ class _TurfDetailScreenState extends State<TurfDetailScreen> {
     _turfController = Get.isRegistered<TurfController>()
         ? Get.find<TurfController>()
         : Get.put(TurfController());
+
+    _couponFocusNode.addListener(() {
+      if (_couponFocusNode.hasFocus) {
+        Future.delayed(const Duration(milliseconds: 300), () {
+          if (_couponKey.currentContext != null) {
+            Scrollable.ensureVisible(
+              _couponKey.currentContext!,
+              duration: const Duration(milliseconds: 300),
+              curve: Curves.easeInOut,
+              alignment: 0.3,
+            );
+          }
+        });
+      }
+    });
 
     _currentTurf = widget.turf;
     if (!GetPlatform.isWeb) {
@@ -344,6 +361,23 @@ class _TurfDetailScreenState extends State<TurfDetailScreen> {
     }
 
     final TextEditingController sheetCouponController = TextEditingController();
+    final FocusNode sheetCouponFocusNode = FocusNode();
+    final GlobalKey sheetCouponKey = GlobalKey();
+
+    sheetCouponFocusNode.addListener(() {
+      if (sheetCouponFocusNode.hasFocus) {
+        Future.delayed(const Duration(milliseconds: 300), () {
+          if (sheetCouponKey.currentContext != null) {
+            Scrollable.ensureVisible(
+              sheetCouponKey.currentContext!,
+              duration: const Duration(milliseconds: 300),
+              curve: Curves.easeInOut,
+              alignment: 0.3,
+            );
+          }
+        });
+      }
+    });
 
     int totalDays = _isScatteredBooking
         ? _scatteredDates.length
@@ -357,16 +391,20 @@ class _TurfDetailScreenState extends State<TurfDetailScreen> {
     _longBookingValidSlots = totalSlotsBooked;
 
     Get.bottomSheet(
-      Container(
-        constraints: BoxConstraints(
-          maxHeight: MediaQuery.of(context).size.height * 0.85,
+      Padding(
+        padding: EdgeInsets.only(
+          bottom: MediaQuery.of(Get.context!).viewInsets.bottom,
         ),
-        padding: const EdgeInsets.all(20),
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-        ),
-        child: SafeArea(
+        child: Container(
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.of(context).size.height * 0.85,
+          ),
+          padding: const EdgeInsets.all(20),
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+          ),
+          child: SafeArea(
           child: SingleChildScrollView(
             child: Obx(() {
               // Recalculate discount reactively when appliedCoupons state changes
@@ -498,6 +536,7 @@ class _TurfDetailScreenState extends State<TurfDetailScreen> {
                       });
 
                       return Container(
+                        key: sheetCouponKey,
                         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
                         decoration: BoxDecoration(
                           color: AppColors.cardBg,
@@ -515,9 +554,10 @@ class _TurfDetailScreenState extends State<TurfDetailScreen> {
                             const SizedBox(width: 12),
                             Expanded(
                               child: TextField(
+                                focusNode: sheetCouponFocusNode,
                                 controller: sheetCouponController,
                                 enabled: !allCovered && !_bookingController.isCouponLoading.value,
-                                scrollPadding: const EdgeInsets.only(bottom: 100),
+                                scrollPadding: const EdgeInsets.only(bottom: 250),
                                 textCapitalization: TextCapitalization.characters,
                                 inputFormatters: [
                                   TextInputFormatter.withFunction(
@@ -807,14 +847,16 @@ class _TurfDetailScreenState extends State<TurfDetailScreen> {
             }),
           ),
         ), // closes SafeArea
-      ),
+        ), // closes Container
+      ), // closes Padding
       isScrollControlled: true,
     ).then((_) {
       Future.delayed(const Duration(milliseconds: 500), () {
         try {
+          sheetCouponFocusNode.dispose();
           sheetCouponController.dispose();
         } catch (e) {
-          debugPrint('Error disposing sheetCouponController: $e');
+          debugPrint('Error disposing sheetCoupon: $e');
         }
       });
     });
@@ -1916,44 +1958,47 @@ class _TurfDetailScreenState extends State<TurfDetailScreen> {
     if (_isLongBooking) {
       return const SizedBox.shrink();
     }
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          'Apply Coupon',
-          style: TextStyle(
-            color: AppColors.textMain,
-            fontSize: 18,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        const SizedBox(height: 15),
-        Obx(() {
-          bool hasCoupon = _bookingController.appliedCoupon.isNotEmpty;
-          return Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            decoration: BoxDecoration(
-              color: AppColors.cardBg,
-              borderRadius: BorderRadius.circular(15),
-              border: Border.all(
-                color: hasCoupon
-                    ? AppColors.primary
-                    : AppColors.green200,
-              ),
+    return Container(
+      key: _couponKey,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Apply Coupon',
+            style: TextStyle(
+              color: AppColors.textMain,
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
             ),
-            child: Row(
-              children: [
-                Icon(
-                  Icons.local_offer_outlined,
-                  color: hasCoupon ? AppColors.primary : AppColors.textSecondary,
+          ),
+          const SizedBox(height: 15),
+          Obx(() {
+            bool hasCoupon = _bookingController.appliedCoupon.isNotEmpty;
+            return Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              decoration: BoxDecoration(
+                color: AppColors.cardBg,
+                borderRadius: BorderRadius.circular(15),
+                border: Border.all(
+                  color: hasCoupon
+                      ? AppColors.primary
+                      : AppColors.green200,
                 ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: TextField(
-                    controller: _couponController,
-                    enabled: !hasCoupon,
-                    scrollPadding: const EdgeInsets.only(bottom: 140),
-                    textCapitalization: TextCapitalization.characters,
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.local_offer_outlined,
+                    color: hasCoupon ? AppColors.primary : AppColors.textSecondary,
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: TextField(
+                      focusNode: _couponFocusNode,
+                      controller: _couponController,
+                      enabled: !hasCoupon,
+                      scrollPadding: const EdgeInsets.only(bottom: 250),
+                      textCapitalization: TextCapitalization.characters,
                     inputFormatters: [
                       TextInputFormatter.withFunction(
                         (oldValue, newValue) => newValue.copyWith(text: newValue.text.toUpperCase()),
@@ -2021,6 +2066,7 @@ class _TurfDetailScreenState extends State<TurfDetailScreen> {
           );
         }),
       ],
+      ),
     );
   }
 
@@ -2568,6 +2614,7 @@ class _TurfDetailScreenState extends State<TurfDetailScreen> {
     _pageController.dispose();
     _amountPaidController.dispose();
     _couponController.dispose();
+    _couponFocusNode.dispose();
     _additionalDiscountController.dispose();
     super.dispose();
   }
