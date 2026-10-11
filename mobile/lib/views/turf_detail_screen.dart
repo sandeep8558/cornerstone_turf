@@ -1299,20 +1299,31 @@ class _TurfDetailScreenState extends State<TurfDetailScreen> {
           CustomScrollView(
             slivers: [
               SliverAppBar(
-                expandedHeight: MediaQuery.of(context).size.width * 0.75,
+                expandedHeight: MediaQuery.of(context).padding.top +
+                    (MediaQuery.of(context).size.width * (9 / 16)),
                 pinned: true,
                 backgroundColor: AppColors.background,
+                leading: Padding(
+                  padding: const EdgeInsets.all(8.0),
+                  child: CircleAvatar(
+                    backgroundColor: Colors.black.withOpacity(0.35),
+                    child: IconButton(
+                      icon: const Icon(Icons.arrow_back, color: Colors.white, size: 20),
+                      onPressed: () => Get.back(),
+                    ),
+                  ),
+                ),
                 flexibleSpace: FlexibleSpaceBar(
                   background: Builder(
                     builder: (context) {
                       List<String> images = _getTurfImages(_currentTurf);
                       if (images.isEmpty) {
                         return Container(
-                          color: Colors.white,
-                          child: const Center(
+                          color: AppColors.green100,
+                          child: Center(
                             child: Icon(
                               Icons.sports_soccer,
-                              color: Colors.white10,
+                              color: AppColors.primary.withOpacity(0.25),
                               size: 80,
                             ),
                           ),
@@ -1334,11 +1345,13 @@ class _TurfDetailScreenState extends State<TurfDetailScreen> {
                                 fit: BoxFit.cover,
                                 errorBuilder: (context, error, stackTrace) =>
                                     Container(
-                                      color: Colors.grey[800],
-                                      child: const Icon(
-                                        Icons.broken_image,
-                                        color: Colors.white24,
-                                        size: 50,
+                                      color: AppColors.green100,
+                                      child: Center(
+                                        child: Icon(
+                                          Icons.sports_soccer,
+                                          color: AppColors.primary.withOpacity(0.25),
+                                          size: 80,
+                                        ),
                                       ),
                                     ),
                               );
