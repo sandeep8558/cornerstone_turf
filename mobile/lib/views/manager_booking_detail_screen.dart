@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../utils/app_colors.dart';
+import '../utils/booking_helper.dart';
 import 'package:get/get.dart';
 import 'package:intl/intl.dart';
 import 'package:animate_do/animate_do.dart';
@@ -42,12 +43,17 @@ class ManagerBookingDetailScreen extends StatelessWidget {
     }
   }
 
-  Future<void> _openWhatsapp(String phoneNumber) async {
+  Future<void> _openWhatsapp(String phoneNumber, {dynamic booking}) async {
     String cleanedNumber = phoneNumber.replaceAll(RegExp(r'\D'), '');
     if (!cleanedNumber.startsWith('91') && cleanedNumber.length == 10) {
       cleanedNumber = '91$cleanedNumber';
     }
-    final Uri whatsappUri = Uri.parse("https://wa.me/$cleanedNumber");
+    String url = "https://wa.me/$cleanedNumber";
+    if (booking != null) {
+      final message = BookingHelper.generateBookingMessage(booking);
+      url += "?text=${Uri.encodeComponent(message)}";
+    }
+    final Uri whatsappUri = Uri.parse(url);
     if (await canLaunchUrl(whatsappUri)) {
       await launchUrl(whatsappUri, mode: LaunchMode.externalApplication);
     } else {
@@ -57,83 +63,7 @@ class ManagerBookingDetailScreen extends StatelessWidget {
 
   void _shareBookingDetails(dynamic booking) {
     try {
-      DateTime bookingDate = DateTime.parse(booking['date'].toString());
-      String dayOfWeek = DateFormat('E').format(bookingDate).toLowerCase();
-      String amountField = '${dayOfWeek}_amount';
-
-      double subTotal = 0;
-      int totalMinutes = 0;
-      if (booking['slots'] != null) {
-        for (var slot in booking['slots']) {
-          subTotal += double.tryParse(slot[amountField]?.toString() ?? '0') ?? 0;
-          totalMinutes += int.tryParse(slot['minutes']?.toString() ?? '0') ?? 0;
-        }
-      }
-
-      double discount = double.tryParse(booking['coupon_usage']?['discount_applied']?.toString() ?? '0') ?? 0;
-      double additionalDiscount = double.tryParse(booking['additional_discount']?.toString() ?? '0') ?? 0;
-      double totalAmount = double.tryParse(booking['amount'].toString()) ?? 0;
-      
-      double paidAmount = 0;
-      if (booking['booking_payments'] != null) {
-        for (var payment in booking['booking_payments']) {
-          paidAmount += double.tryParse(payment['amount'].toString()) ?? 0;
-        }
-      }
-      double balanceDue = totalAmount - paidAmount;
-
-      String name = booking['user']?['name'] ?? 'N/A';
-      String dateStr = DateFormat('EEEE, dd MMM yyyy').format(bookingDate);
-
-      String slotTimings = '';
-      if (booking['slots'] != null && booking['slots'] is List) {
-        final slots = booking['slots'] as List;
-        slotTimings = slots.map((s) {
-          try {
-            final fromTime = DateFormat('HH:mm:ss').parse(s['from'].toString());
-            final toTime = DateFormat('HH:mm:ss').parse(s['to'].toString());
-            return '${DateFormat('hh:mm a').format(fromTime)} to ${DateFormat('hh:mm a').format(toTime)}';
-          } catch (e) {
-            return '${s['from']} to ${s['to']}';
-          }
-        }).join(', ');
-      }
-
-      String durationStr = '';
-      if (totalMinutes > 0) {
-        double hrs = totalMinutes / 60.0;
-        if (hrs % 1 == 0) {
-          durationStr = '${hrs.toInt()} hrs';
-        } else {
-          durationStr = '${hrs.toStringAsFixed(1)} hrs';
-        }
-      } else {
-        durationStr = 'N/A';
-      }
-
-      String boxName = booking['turf']?['name'] ?? 'Cornerstone';
-
-      final message = '''📋 Booking Details 
-━━━━━━━━━━━━━━━
-👤 Name : $name
-📅 Date : $dateStr
-⏰ Time : $slotTimings
-⏱️ Duration : $durationStr
-🟩 Box : $boxName
-
-💳 Payment Summary
-Sub Total : ₹ ${subTotal.toStringAsFixed(0)}
-Coupon Discount : ₹ ${discount.toStringAsFixed(0)}
-Additional Discount : ₹ ${additionalDiscount.toStringAsFixed(0)}
-Total Amount : ₹ ${totalAmount.toStringAsFixed(0)}
-Advance Paid : ₹ ${paidAmount.toStringAsFixed(0)}
-Due Amount : ₹ ${balanceDue.toStringAsFixed(2)}
- 
-Thank you for your booking! 
-
-Regards,
-Cornerstone Turf''';
-
+      final message = BookingHelper.generateBookingMessage(booking);
       SharePlus.instance.share(ShareParams(text: message));
     } catch (e) {
       Get.snackbar('Error', 'Failed to share booking details: $e');
@@ -656,7 +586,7 @@ Cornerstone Turf''';
                           ),
                           OutlinedButton.icon(
                             onPressed: user['mobile_number'] != null
-                                ? () => _openWhatsapp(user['mobile_number'])
+                                ? () => _openWhatsapp(user['mobile_number'], booking: booking)
                                 : null,
                             icon: const Icon(Icons.chat_bubble_outline, size: 16),
                             label: const Text('WhatsApp', style: TextStyle(fontSize: 12)),

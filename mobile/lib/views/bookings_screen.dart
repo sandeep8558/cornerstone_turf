@@ -5,8 +5,8 @@ import 'package:intl/intl.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import '../controllers/booking_controller.dart';
-import '../controllers/auth_controller.dart';
 import '../utils/app_colors.dart';
+import '../utils/booking_helper.dart';
 import 'turf_detail_screen.dart';
 
 class BookingsScreen extends StatelessWidget {
@@ -70,84 +70,7 @@ class BookingsScreen extends StatelessWidget {
 
   void _shareBookingDetails(dynamic booking) {
     try {
-      DateTime bookingDate = DateTime.parse(booking['date'].toString());
-      String dayOfWeek = DateFormat('E').format(bookingDate).toLowerCase();
-      String amountField = '${dayOfWeek}_amount';
-
-      double subTotal = 0;
-      int totalMinutes = 0;
-      if (booking['slots'] != null) {
-        for (var slot in booking['slots']) {
-          subTotal += double.tryParse(slot[amountField]?.toString() ?? '0') ?? 0;
-          totalMinutes += int.tryParse(slot['minutes']?.toString() ?? '0') ?? 0;
-        }
-      }
-
-      double discount = double.tryParse(booking['coupon_usage']?['discount_applied']?.toString() ?? '0') ?? 0;
-      double totalAmount = double.tryParse(booking['amount'].toString()) ?? 0;
-      
-      double paidAmount = 0;
-      if (booking['booking_payments'] != null) {
-        for (var payment in booking['booking_payments']) {
-          paidAmount += double.tryParse(payment['amount'].toString()) ?? 0;
-        }
-      }
-      double balanceDue = totalAmount - paidAmount;
-
-      String name = booking['user']?['name'] ?? Get.find<AuthController>().user['name'] ?? 'N/A';
-      String dateStr = DateFormat('EEEE, dd MMM yyyy').format(bookingDate);
-
-      String slotTimings = '';
-      if (booking['slots'] != null && booking['slots'] is List) {
-        final slots = booking['slots'] as List;
-        slotTimings = slots.map((s) {
-          try {
-            final fromTime = DateFormat('HH:mm:ss').parse(s['from'].toString());
-            final toTime = DateFormat('HH:mm:ss').parse(s['to'].toString());
-            return '${DateFormat('hh:mm a').format(fromTime)} to ${DateFormat('hh:mm a').format(toTime)}';
-          } catch (e) {
-            return '${s['from']} to ${s['to']}';
-          }
-        }).join(', ');
-      }
-
-      String durationStr = '';
-      if (totalMinutes > 0) {
-        double hrs = totalMinutes / 60.0;
-        if (hrs % 1 == 0) {
-          durationStr = '${hrs.toInt()} hrs';
-        } else {
-          durationStr = '${hrs.toStringAsFixed(1)} hrs';
-        }
-      } else {
-        durationStr = 'N/A';
-      }
-
-      String boxName = booking['turf']?['name'] ?? 'Cornerstone';
-
-      final message = '''📋 Booking Details 
-━━━━━━━━━━━━━━━
-👤 Name : $name
-📅 Date : $dateStr
-⏰ Time : $slotTimings
-⏱️ Duration : $durationStr
-🟩 Box : $boxName
-
-💳 Payment Summary
-Sub Total : ₹ ${subTotal.toStringAsFixed(0)}
-Discount : ₹ ${discount.toStringAsFixed(0)}
-Total Amount : ₹ ${totalAmount.toStringAsFixed(0)}
-Advance Paid : ₹ ${paidAmount.toStringAsFixed(0)}
-Due Amount : ₹ ${balanceDue.toStringAsFixed(2)}
- 
-Thank you for your booking! 
-
-Regards,
-Cornerstone Turf 
-
-⚠️ Notes : 
-✦ ✦ Once a transaction is confirmed, it cannot be Cancelled & Amount are non-refundable.''';
-
+      final message = BookingHelper.generateBookingMessage(booking);
       SharePlus.instance.share(ShareParams(text: message));
     } catch (e) {
       Get.snackbar('Error', 'Failed to share booking details: $e');
