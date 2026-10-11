@@ -17,6 +17,9 @@ new class extends Component {
     public $min_part_payment;
     public $is_pay_at_location_active;
 
+    public $support_phone;
+    public $whatsapp_booking_message;
+
     public function mount() {
         $settings = Setting::first() ?: new Setting();
         
@@ -31,6 +34,13 @@ new class extends Component {
         $this->razorpay_key = $settings->razorpay_key;
         $this->razorpay_secret = $settings->razorpay_secret;
         $this->sms_gateway_token = $settings->sms_gateway_token;
+        $this->support_phone = $settings->support_phone ?? '7447867273 / 7447437273';
+        $this->whatsapp_booking_message = $settings->whatsapp_booking_message ?: Setting::defaultWhatsappBookingMessage();
+    }
+
+    public function resetWhatsappMessage() {
+        $this->whatsapp_booking_message = Setting::defaultWhatsappBookingMessage();
+        session()->flash('message', 'Reset WhatsApp message template to default.');
     }
 
     public function save() {
@@ -42,6 +52,8 @@ new class extends Component {
             'razorpay_key' => 'nullable|string',
             'razorpay_secret' => 'nullable|string',
             'sms_gateway_token' => 'nullable|string',
+            'support_phone' => 'nullable|string|max:100',
+            'whatsapp_booking_message' => 'nullable|string',
         ]);
 
         $settings = Setting::first() ?: new Setting();
@@ -57,6 +69,8 @@ new class extends Component {
             'razorpay_key' => $this->razorpay_key,
             'razorpay_secret' => $this->razorpay_secret,
             'sms_gateway_token' => $this->sms_gateway_token,
+            'support_phone' => $this->support_phone,
+            'whatsapp_booking_message' => $this->whatsapp_booking_message,
         ])->save();
 
         session()->flash('message', 'Settings updated successfully.');
@@ -167,14 +181,76 @@ new class extends Component {
                         <input type="password" wire:model="sms_gateway_token" class="form-control rounded-3" placeholder="Your API Token">
                     </div>
                 </div>
-                <div class="card-footer bg-light border-top p-4 mt-auto text-end">
-                    <button wire:click="save" class="btn btn-primary px-5 rounded-3 py-2 fw-bold shadow-sm">Save All Settings</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- WhatsApp & Support Message Template -->
+        <div class="col-12">
+            <div class="card border-0 shadow-sm rounded-4 overflow-hidden">
+                <div class="card-header bg-white border-bottom p-4 d-flex flex-wrap align-items-center justify-content-between gap-3">
+                    <div class="d-flex align-items-center gap-2">
+                        <div class="p-2 rounded-3 bg-success-subtle text-success">
+                            <i class="bi bi-whatsapp fs-5"></i>
+                        </div>
+                        <div>
+                            <h3 class="h6 fw-bold mb-0">WhatsApp Booking Message & Support Settings</h3>
+                            <div class="text-muted extra-small">Customize the message sent to customers via WhatsApp and the share action.</div>
+                        </div>
+                    </div>
+                    <button type="button" wire:click="resetWhatsappMessage" wire:confirm="Are you sure you want to reset the WhatsApp message to default template?" class="btn btn-outline-secondary btn-sm rounded-3">
+                        <i class="bi bi-arrow-counterclockwise me-1"></i> Reset to Default Template
+                    </button>
+                </div>
+                <div class="card-body p-4">
+                    <div class="row g-4 mb-4">
+                        <div class="col-md-6">
+                            <label class="form-label small fw-semibold text-muted">Support Contact Numbers</label>
+                            <input type="text" wire:model="support_phone" class="form-control rounded-3" placeholder="e.g. 7447867273 / 7447437273">
+                            <div class="form-text extra-small mt-1 text-muted">Appears in WhatsApp message and on support links.</div>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <label class="form-label small fw-semibold text-muted mb-0">WhatsApp Message Template</label>
+                            <span class="badge bg-light text-secondary border">Dynamic Tags</span>
+                        </div>
+
+                        <div class="p-3 bg-light rounded-3 mb-3 border">
+                            <div class="small fw-semibold text-secondary mb-2">Click any tag below to see what will be inserted:</div>
+                            <div class="d-flex flex-wrap gap-2">
+                                <span class="badge bg-white text-dark border px-2 py-1 font-monospace">{name}</span>
+                                <span class="badge bg-white text-dark border px-2 py-1 font-monospace">{date}</span>
+                                <span class="badge bg-white text-dark border px-2 py-1 font-monospace">{time}</span>
+                                <span class="badge bg-white text-dark border px-2 py-1 font-monospace">{duration}</span>
+                                <span class="badge bg-white text-dark border px-2 py-1 font-monospace">{box}</span>
+                                <span class="badge bg-white text-dark border px-2 py-1 font-monospace">{sub_total}</span>
+                                <span class="badge bg-white text-dark border px-2 py-1 font-monospace">{coupon_discount}</span>
+                                <span class="badge bg-white text-dark border px-2 py-1 font-monospace">{additional_discount}</span>
+                                <span class="badge bg-white text-dark border px-2 py-1 font-monospace">{total_amount}</span>
+                                <span class="badge bg-white text-dark border px-2 py-1 font-monospace">{paid_amount}</span>
+                                <span class="badge bg-white text-dark border px-2 py-1 font-monospace">{due_amount}</span>
+                                <span class="badge bg-white text-dark border px-2 py-1 font-monospace">{support_contact}</span>
+                            </div>
+                        </div>
+
+                        <textarea wire:model="whatsapp_booking_message" rows="14" class="form-control font-monospace rounded-3 bg-white" style="font-size: 0.9rem; line-height: 1.5;"></textarea>
+                        <div class="form-text extra-small mt-2 text-muted">
+                            💡 Use emojis, line breaks, and standard WhatsApp markdown (e.g. <code>*bold*</code>, <code>_italics_</code>). The mobile app and dashboard will automatically substitute the variables when sharing or opening WhatsApp.
+                        </div>
+                    </div>
+                </div>
+                <div class="card-footer bg-light border-top p-4 d-flex justify-content-end">
+                    <button wire:click="save" class="btn btn-primary px-5 rounded-3 py-2 fw-bold shadow-sm">
+                        <i class="bi bi-check-lg me-1"></i> Save All Settings
+                    </button>
                 </div>
             </div>
         </div>
     </div>
 
     <style>
-        .extra-small { font-size: 0.7rem; }
+        .extra-small { font-size: 0.75rem; }
     </style>
 </div>

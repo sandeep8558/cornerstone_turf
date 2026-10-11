@@ -26,6 +26,8 @@ class SettingController extends Controller
             'min_part_payment' => (float)$settings->min_part_payment,
             'is_pay_at_location_active' => (bool)$settings->is_pay_at_location_active,
             'booking_open_days' => (int)$settings->booking_open_days,
+            'support_phone' => $settings->support_phone ?: '7447867273 / 7447437273',
+            'whatsapp_booking_message' => $settings->whatsapp_booking_message ?: Setting::defaultWhatsappBookingMessage(),
         ]);
     }
 }

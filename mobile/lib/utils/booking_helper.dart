@@ -1,4 +1,6 @@
+import 'package:get/get.dart';
 import 'package:intl/intl.dart';
+import '../controllers/booking_controller.dart';
 
 class BookingHelper {
   static const String supportPhone = '7447867273 / 7447437273';
@@ -6,7 +8,32 @@ class BookingHelper {
       'Near Sarvodaya Vidyalaya, Sarvodaya Nagar, Datta Nagar, Ambernath West 421505';
 
   /// Generates a complete, formatted booking summary message for WhatsApp and sharing.
-  static String generateBookingMessage(dynamic booking) {
+  /// If a custom template is configured in Admin Settings, it interpolates dynamic tags.
+  static String generateBookingMessage(
+    dynamic booking, {
+    Map<String, dynamic>? customSettings,
+  }) {
+    String currentSupportPhone = supportPhone;
+    String? configuredTemplate;
+
+    try {
+      Map<dynamic, dynamic>? settings = customSettings;
+      if (settings == null && Get.isRegistered<BookingController>()) {
+        settings = Get.find<BookingController>().systemSettings;
+      }
+
+      if (settings != null) {
+        if (settings['support_phone'] != null &&
+            settings['support_phone'].toString().trim().isNotEmpty) {
+          currentSupportPhone = settings['support_phone'].toString().trim();
+        }
+        if (settings['whatsapp_booking_message'] != null &&
+            settings['whatsapp_booking_message'].toString().trim().isNotEmpty) {
+          configuredTemplate = settings['whatsapp_booking_message'].toString();
+        }
+      }
+    } catch (_) {}
+
     try {
       DateTime bookingDate = DateTime.parse(booking['date'].toString());
       String dayOfWeek = DateFormat('E').format(bookingDate).toLowerCase();
@@ -104,6 +131,22 @@ class BookingHelper {
 
       String boxName = booking['turf']?['name']?.toString() ?? 'Cornerstone';
 
+      if (configuredTemplate != null && configuredTemplate.trim().isNotEmpty) {
+        return configuredTemplate
+            .replaceAll('{name}', name)
+            .replaceAll('{date}', dateStr)
+            .replaceAll('{time}', slotTimings)
+            .replaceAll('{duration}', durationStr)
+            .replaceAll('{box}', boxName)
+            .replaceAll('{sub_total}', subTotal.toStringAsFixed(0))
+            .replaceAll('{coupon_discount}', couponDiscount.toStringAsFixed(0))
+            .replaceAll('{additional_discount}', additionalDiscount.toStringAsFixed(0))
+            .replaceAll('{total_amount}', totalAmount.toStringAsFixed(0))
+            .replaceAll('{paid_amount}', paidAmount.toStringAsFixed(0))
+            .replaceAll('{due_amount}', balanceDue.toStringAsFixed(2))
+            .replaceAll('{support_contact}', currentSupportPhone);
+      }
+
       final buffer = StringBuffer();
       buffer.writeln('📋 Booking Details');
       buffer.writeln('━━━━━━━━━━━━━━━');
@@ -121,7 +164,7 @@ class BookingHelper {
       buffer.writeln('Advance Paid : ₹ ${paidAmount.toStringAsFixed(0)}');
       buffer.writeln('Due Amount : ₹ ${balanceDue.toStringAsFixed(2)}');
       buffer.writeln();
-      buffer.writeln('📞 Support Contact : $supportPhone');
+      buffer.writeln('📞 Support Contact : $currentSupportPhone');
       buffer.writeln();
       buffer.writeln('Thank you for your booking!');
       buffer.writeln();
@@ -133,7 +176,7 @@ class BookingHelper {
 
       return buffer.toString();
     } catch (e) {
-      return '📋 Booking Details\n👤 Name : ${booking['user']?['name'] ?? 'N/A'}\nTotal Amount : ₹ ${booking['amount'] ?? '0'}\n📞 Support Contact : $supportPhone';
+      return '📋 Booking Details\n👤 Name : ${booking['user']?['name'] ?? 'N/A'}\nTotal Amount : ₹ ${booking['amount'] ?? '0'}\n📞 Support Contact : $currentSupportPhone';
     }
   }
 }
