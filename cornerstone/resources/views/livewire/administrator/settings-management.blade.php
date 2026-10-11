@@ -181,7 +181,6 @@ new class extends Component {
                         <input type="password" wire:model="sms_gateway_token" class="form-control rounded-3" placeholder="Your API Token">
                     </div>
                 </div>
-                </div>
             </div>
         </div>
 
